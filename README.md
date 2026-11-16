@@ -9,26 +9,12 @@
 - 파이썬 실행: 브라우저 안에서 실행 (설치 필요 없음)
 - 기록: 학생의 반·번호·이름과 진행 상황을 Firebase(Firestore)에 저장
 - 교사용 화면: 시작 화면의 "교사용" → 비밀번호 입력 → 학생 기록 실시간 확인, CSV 내려받기
+- 교사용 화면 비밀번호 : ckdcptndjq(창체수업)
+
 
 ## 사이트 주소 (GitHub Pages)
 
 https://chaeyeon-t.github.io/Python-for-middle/
-
-## Firebase 연결
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /students/{id} {
-      allow read: if true;
-      allow create, update: if true;
-    }
-  }
-}
-```
-
-설정값을 비워 두면 진행 기록은 학생 브라우저에만 저장됩니다.
 
 ## 저장되는 기록 (`students` 컬렉션)
 
@@ -41,8 +27,3 @@ service cloud.firestore {
 | tries | 방별 '보안문 해제 시도' 횟수 |
 | currentRoom, finished | 현재 방, 탈출 완료 여부 |
 | updatedAt, lastLoginAt | 마지막 저장 시각, 마지막 시작 시각 |
-
-## 참고
-
-- 교사용 비밀번호는 코드에 SHA-256 값으로만 들어 있습니다. 화면을 가리는 용도이며, 더 강한 보호가 필요하면 Firebase Authentication을 추가하세요.
-- 공유 컴퓨터에서 다른 학생 정보를 입력하면 진행 기록이 새로 시작됩니다.
