@@ -160,6 +160,8 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .db-note{font-family:var(--font-code);font-size:12px;color:var(--muted)}
 .db-note.ok{color:var(--ok)}
 .student-tag{color:var(--text);font-family:var(--font-body)}
+.exit-btn{padding:4px 12px;font-size:13px}
+.save-note{font-size:14px;color:var(--ok);min-height:1.2em}
 .link-btn{margin-left:auto;background:none;border:0;color:var(--muted);font-size:13px;text-decoration:underline;text-underline-offset:3px;padding:6px 4px}
 .link-btn:hover{color:var(--amber)}
 .pw-row{display:flex;gap:10px}
@@ -215,6 +217,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
     <nav class="map" id="map" aria-label="연구소 지도"></nav>
     <div class="hud-right">
       <span class="student-tag" id="studentTag"></span>
+      <button class="btn btn-run btn-sm exit-btn" id="exitBtn" type="button" hidden>나가기</button>
       <span class="status-pill loading" id="pyStatus">실행 준비 중…</span>
     </div>
   </header>
@@ -284,6 +287,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
         <label class="f-name" for="inName">이름<input id="inName" type="text" maxlength="12" autocomplete="off" placeholder="예: 김민준"></label>
       </form>
       <div class="who-msg" id="whoMsg" role="alert"></div>
+      <div class="save-note" id="saveNote" role="status"></div>
       <div class="db-note" id="dbNote">기록 서버 확인 중…</div>
       <div class="row">
         <button class="btn btn-submit" id="startBtn" type="button">탈출 시작</button>
@@ -306,6 +310,22 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
       <div class="row">
         <button class="btn btn-run" id="reviewBtn" type="button">방 다시 둘러보기</button>
         <button class="btn btn-submit" id="againBtn" type="button">처음부터 다시 도전</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 나가기 확인 -->
+<div class="overlay" id="exitDlg" hidden>
+  <div class="card" style="max-width:440px">
+    <div class="tape"></div>
+    <div class="card-body">
+      <div class="eyebrow">잠시 나가기</div>
+      <h1 style="font-size:30px">여기까지 저장할까요?</h1>
+      <p>지금까지 푼 방과 작성한 코드가 저장돼요. 다음 시간에 같은 반·번호·이름으로 들어오면 이 방부터 이어서 풀 수 있어요. 다른 컴퓨터에서 들어와도 괜찮아요.</p>
+      <div class="row">
+        <button class="btn btn-submit" id="exitOk" type="button">저장하고 나가기</button>
+        <button class="btn btn-run" id="exitCancel" type="button">계속 풀기</button>
       </div>
     </div>
   </div>
@@ -1192,22 +1212,74 @@ function readStudent(){
 function updateStudentTag(){
   const st = state.student;
   $("studentTag").textContent = st ? `${st.cls}반 ${st.num}번 ${st.name}` : "";
+  $("exitBtn").hidden = !st || !$("intro").hidden;
 }
-function startGame(){
+// 서버에 저장된 기록과 이 컴퓨터의 기록을 합침 (더 많이 푼 쪽을 살림)
+function mergeCloud(rec){
+  if(!rec) return;
+  const cleared = (Array.isArray(rec.clearedRooms) ? rec.clearedRooms : []).map(n=>n-1).filter(i=>i>=0 && i<MISSIONS.length);
+  state.done = [...new Set([...state.done, ...cleared])];
+  if(Array.isArray(rec.tries)) state.tries = MISSIONS.map((m,i)=>Math.max(state.tries[i]||0, +rec.tries[i]||0));
+  if(rec.codes && typeof rec.codes === "object"){
+    for(const k in rec.codes){ if(state.codes[k] == null || state.codes[k] === "") state.codes[k] = String(rec.codes[k]); }
+  }
+  const maxDone = state.done.length ? Math.max(...state.done) : -1;
+  state.unlocked = Math.max(state.unlocked, Math.min(maxDone+1, MISSIONS.length-1));
+  const cloudCur = (+rec.currentRoom||1) - 1;
+  if(cloudCur > state.cur && cloudCur <= state.unlocked) state.cur = cloudCur;
+}
+let starting = false;
+async function startGame(){
+  if(starting) return;
   const r = readStudent();
   if(r.err){ $("whoMsg").textContent = r.err; $(r.el).focus(); return; }
-  $("whoMsg").textContent = "";
+  $("whoMsg").textContent = ""; $("saveNote").textContent = "";
   const prev = state.student, st = r.student;
   const same = prev && prev.cls===st.cls && prev.num===st.num && prev.name===st.name;
   if(!same){
-    // 다른 학생이 같은 컴퓨터를 쓰면 진행 기록을 새로 시작
+    // 다른 학생이 같은 컴퓨터를 쓰면 이 컴퓨터의 기록을 비우고, 서버 기록이 있으면 불러옴
     state = {cur:0, unlocked:0, done:[], tries:[0,0,0,0,0,0,0], codes:{}, started:true, student:st};
   }
+  if(window.LabDB && window.LabDB.load){
+    starting = true;
+    const btn = $("startBtn"), label = btn.textContent;
+    btn.disabled = true; btn.textContent = "기록 불러오는 중…";
+    try{
+      const rec = await Promise.race([window.LabDB.load(st), sleep(5000).then(()=>null)]);
+      mergeCloud(rec);
+    }catch(e){ console.warn("[PY-LAB] 기록 불러오기 실패:", e); }
+    btn.disabled = false; btn.textContent = label; starting = false;
+  }
   state.started = true; save();
-  updateStudentTag(); cloudSave(true);
   $("intro").hidden = true;
+  updateStudentTag(); cloudSave(true);
   goto(state.cur); codeEl.focus();
 }
+
+/* ---------- 나가기 ---------- */
+$("exitBtn").addEventListener("click", ()=>{ $("exitDlg").hidden = false; $("exitOk").focus(); });
+$("exitCancel").addEventListener("click", ()=>{ $("exitDlg").hidden = true; codeEl.focus(); });
+$("exitOk").addEventListener("click", async ()=>{
+  const btn = $("exitOk");
+  btn.disabled = true; btn.textContent = "저장하는 중…";
+  state.codes[state.cur] = codeEl.value; save();
+  let cloudOk = false;
+  if(window.LabDB){
+    try{ cloudOk = await Promise.race([cloudSave(false, true), sleep(5000).then(()=>false)]); }catch(e){ cloudOk = false; }
+  }
+  const st = state.student;
+  btn.disabled = false; btn.textContent = "저장하고 나가기";
+  $("exitDlg").hidden = true;
+  // 시작 화면으로 돌아가고 입력칸은 비워서 다음 학생이 쓸 수 있게
+  $("inCls").value = ""; $("inNum").value = ""; $("inName").value = "";
+  $("startBtn").textContent = "탈출 시작"; $("resetBtn").hidden = true;
+  $("saveNote").textContent = cloudOk
+    ? `${st.cls}반 ${st.num}번 ${st.name}: ${state.done.length}/7 저장 완료. 다음에 같은 정보로 들어오면 이어서 풀 수 있어요.`
+    : `${st.cls}반 ${st.num}번 ${st.name}: 이 컴퓨터에 저장했어요. 다음에도 이 컴퓨터에서 같은 정보로 들어오면 이어서 풀 수 있어요.`;
+  $("intro").hidden = false; updateStudentTag();
+  $("inCls").focus();
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !$("exitDlg").hidden){ $("exitDlg").hidden = true; } });
 $("startBtn").addEventListener("click", startGame);
 $("whoForm").addEventListener("submit", e=>{ e.preventDefault(); startGame(); });
 $("whoForm").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); startGame(); } });
@@ -1222,8 +1294,8 @@ $("whoForm").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefa
 updateStudentTag();
 
 /* ---------- 기록 서버(Firebase) ---------- */
-function cloudSave(isLogin){
-  if(!state.student || !window.LabDB) return;
+function cloudSave(isLogin, wait){
+  if(!state.student || !window.LabDB) return Promise.resolve(false);
   const st = state.student;
   const data = {
     class: st.cls, number: st.num, name: st.name,
@@ -1231,11 +1303,13 @@ function cloudSave(isLogin){
     clearedRooms: [...state.done].sort((a,b)=>a-b).map(i=>i+1),
     tries: state.tries.slice(0,7),
     currentRoom: state.cur+1,
-    finished: state.done.length === MISSIONS.length
+    finished: state.done.length === MISSIONS.length,
+    codes: Object.fromEntries(Object.entries(state.codes).map(([k,v])=>[String(k), String(v).slice(0,5000)]))
   };
-  window.LabDB.save(st, data, !!isLogin).catch(e=>{
+  return window.LabDB.save(st, data, !!isLogin).then(()=>true).catch(e=>{
     console.warn("[PY-LAB] 기록 저장 실패:", e);
     setDbNote("기록 서버에 저장하지 못했어요 · 진행 기록은 이 컴퓨터에 저장돼요", false);
+    return false;
   });
 }
 function setDbNote(t, ok){ const n=$("dbNote"); n.textContent = (ok?"● ":"○ ")+t; n.className = "db-note"+(ok?" ok":""); }
@@ -1396,11 +1470,17 @@ if(!firebaseConfig.projectId){
 }else{
   try{
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
-    const { getFirestore, doc, setDoc, serverTimestamp, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
+    const { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const db = getFirestore(initializeApp(firebaseConfig));
+    const docId = st => `${st.cls}반-${String(st.num).padStart(2,"0")}번-${st.name}`;
     window.LabDB = {
+      // 학생 기록 불러오기 (이어서 풀기)
+      async load(st){
+        const snap = await getDoc(doc(db, COLLECTION, docId(st)));
+        return snap.exists() ? snap.data() : null;
+      },
       async save(st, data, isLogin){
-        const id = `${st.cls}반-${String(st.num).padStart(2,"0")}번-${st.name}`;
+        const id = docId(st);
         const extra = isLogin ? { lastLoginAt: serverTimestamp() } : {};
         await setDoc(doc(db, COLLECTION, id), { ...data, ...extra, updatedAt: serverTimestamp() }, { merge: true });
         status("기록 서버에 저장됨", true);
