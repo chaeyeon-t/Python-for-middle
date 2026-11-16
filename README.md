@@ -14,8 +14,6 @@
 
 https://chaeyeon-t.github.io/Python-for-middle/
 
-처음 한 번은 저장소 **Settings → Pages**에서 Source를 `Deploy from a branch`, Branch를 `main` / `/ (root)`로 지정해야 합니다.
-
 ## Firebase 연결
 
 ```
