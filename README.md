@@ -18,11 +18,6 @@ https://chaeyeon-t.github.io/Python-for-middle/
 
 ## Firebase 연결
 
-1. Firebase 콘솔에서 프로젝트를 만들고 웹 앱(`</>`)을 등록합니다.
-2. **Firestore Database**를 만듭니다.
-3. `index.html` 아래쪽의 `firebaseConfig`에 콘솔의 설정값을 붙여 넣습니다.
-4. Firestore **규칙**을 아래처럼 설정합니다.
-
 ```
 rules_version = '2';
 service cloud.firestore {
