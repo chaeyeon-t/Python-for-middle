@@ -215,7 +215,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
     <nav class="map" id="map" aria-label="연구소 지도"></nav>
     <div class="hud-right">
       <span class="student-tag" id="studentTag"></span>
-      <span class="status-pill loading" id="pyStatus">파이썬 엔진 부팅 중…</span>
+      <span class="status-pill loading" id="pyStatus">실행 준비 중…</span>
     </div>
   </header>
 
@@ -277,7 +277,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
       <div class="eyebrow">비상 경보 · 제7 연구소</div>
       <h1>파이썬 연구소에서 <em>탈출</em>하라</h1>
       <div class="log" id="introLog"></div>
-      <p>방은 모두 7개예요. 방마다 파이썬 코드로 보안 장치를 풀어야 다음 방으로 갈 수 있어요. 코드를 쓰고 <b>▶ 실행</b>으로 결과를 확인한 다음, <b>보안문 해제 시도</b>를 누르면 채점돼요.</p>
+      <p>방은 모두 7개다. 방마다 파이썬 코드로 보안 장치를 풀어야 다음 방으로 갈 수 있다. 코드를 작성하고 <b>▶ 실행</b>으로 결과를 확인한 다음, <b>보안문 해제 시도</b>를 누르면 채점돼요.</p>
       <form class="who" id="whoForm" novalidate>
         <label class="f-cls" for="inCls">반<input id="inCls" type="number" inputmode="numeric" min="1" max="30" placeholder="예: 2"></label>
         <label class="f-num" for="inNum">번호<input id="inNum" type="number" inputmode="numeric" min="1" max="60" placeholder="예: 15"></label>
@@ -805,7 +805,7 @@ const ICONS = {
 const MISSIONS = [
   {
     room:"연구소 실험실", short:"실험실", icon:"flask",
-    story:"눈을 떠 보니 낯선 연구소 안이에요. 실험실 컴퓨터를 다시 켜려면 부팅 메시지를 화면에 띄워야 해요.",
+    story:"눈을 떠 보니 낯선 연구소 안이다. 실험실 컴퓨터를 다시 켜려면 부팅 메시지를 화면에 띄워야 한다.",
     task:"아래 두 줄을 <b>똑같이</b> 출력하세요.",
     exIn:null,
     exOut:"시스템 재부팅 완료\n탈출 프로토콜을 시작합니다",
