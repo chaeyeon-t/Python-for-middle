@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>파이썬 연구소 탈출</title>
+<title>이스케이프 파이썬</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -223,6 +223,7 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .stamp b{font-family:var(--font-display);font-weight:400;font-size:46px;color:var(--ok);text-shadow:0 0 18px rgba(107,227,154,.6)}
 .stamp span{font-family:var(--font-code);color:var(--text);font-size:15px}
 
+.subtitle{margin:-8px 0 0;color:var(--text);font-size:17px;font-weight:500}
 .who{display:grid;grid-template-columns:90px 90px 1fr;gap:10px}
 @media (max-width:480px){.who{grid-template-columns:1fr 1fr}.who .f-name{grid-column:1/-1}}
 .who label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
@@ -296,7 +297,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
 <body>
 <div class="app">
   <header class="hud">
-    <button class="logo" id="logo" type="button" title="파이썬 연구소 탈출"><span class="dot"></span>PY-LAB 탈출</button>
+    <button class="logo" id="logo" type="button" title="이스케이프 파이썬"><span class="dot"></span>이스케이프 파이썬</button>
     <nav class="map" id="map" aria-label="연구소 지도"></nav>
     <div class="hud-right">
       <span class="student-tag" id="studentTag"></span>
@@ -373,7 +374,8 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
     <div class="tape"></div>
     <div class="card-body">
       <div class="eyebrow">비상 경보 · 제7 연구소</div>
-      <h1>파이썬 연구소에서 <em>탈출</em>하라</h1>
+      <h1>이스케이프 <em>파이썬</em></h1>
+      <p class="subtitle">파이썬 코드로 연구소를 탈출하라</p>
       <div class="log" id="introLog"></div>
       <p>방은 모두 12개다. 방마다 파이썬 코드로 보안 장치를 풀어야 다음 방으로 갈 수 있다. 코드를 작성하고 <b>▶ 실행</b>으로 결과를 확인한 다음, <b>보안문 해제 시도</b>를 누르면 채점돼요.</p>
       <form class="who" id="whoForm" novalidate>
@@ -2495,7 +2497,7 @@ $("tCsv").addEventListener("click", ()=>{
   try{
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-    a.download = `파이썬연구소탈출_기록_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `이스케이프파이썬_기록_${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a); a.click(); a.remove();
   }catch(e){ $("tCsv").textContent = "내려받기 실패"; }
 });
