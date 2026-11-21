@@ -95,6 +95,24 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .sc-bubble{position:absolute;transform:translate(-50%,8px);max-width:62%;background:#f3efd8;color:#1b1a14;padding:10px 14px;border-radius:10px;font-size:14px;line-height:1.5;box-shadow:0 6px 20px rgba(0,0,0,.45);pointer-events:none;z-index:2}
 .sc-bubble::before{content:"";position:absolute;top:-8px;left:50%;margin-left:-8px;border:8px solid transparent;border-top:0;border-bottom-color:#f3efd8}
 .sc-bubble[hidden]{display:none}
+/* 성공 연출 */
+.wa{animation:waFrom var(--t,1s) cubic-bezier(.25,.8,.3,1) var(--d,0s) both}
+@keyframes waFrom{from{transform:var(--from,none);opacity:var(--o0,1)}}
+.wa-flash{animation:waFlash var(--t,2s) ease var(--d,0s) both}
+@keyframes waFlash{0%{opacity:0}15%{opacity:1}80%{opacity:1}100%{opacity:0}}
+.wa-arc{animation:waArc 1.7s ease .3s both}
+@keyframes waArc{from{stroke-dasharray:70 100}}
+.wa-wave{transform-box:fill-box;transform-origin:center;animation:waWave 1.65s ease-out infinite both}
+@keyframes waWave{0%{transform:scale(.15);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+.wa-fall{transform-box:fill-box;transform-origin:center;animation:waFall 2.6s linear infinite both}
+@keyframes waFall{from{transform:translateY(0) rotate(0deg)}to{transform:translateY(540px) rotate(540deg)}}
+.scene.static .wa,.scene.static .wa-flash,.scene.static .wa-arc{animation:none}
+.scene.playing{box-shadow:0 0 0 2px var(--ok),0 0 28px rgba(107,227,154,.35)}
+.sc-cell{cursor:pointer;transition:transform .7s cubic-bezier(.3,.8,.3,1);outline:none}
+.sc-cell:not(.in):hover,.sc-cell:not(.in):focus-visible{filter:drop-shadow(0 0 8px #6be39a)}
+.sc-cell.in{cursor:default}
+.sc-seg{transition:opacity .4s}
+.sc-full{animation:blink .45s 3}
 .mission{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 18px;align-items:start}
 .mission .col{display:flex;flex-direction:column;gap:10px;min-width:0}
 @media (max-width:1250px){.mission{grid-template-columns:1fr}}
@@ -1184,22 +1202,31 @@ document.addEventListener("keydown", e=>{
 });
 
 /* ---------- 미션 장면 그림 (800 × 450) ----------
-   각 장면: svg(배경 그림), hot(클릭하면 코드 창이 열리는 장치), clues(클릭하면 말풍선이 뜨는 단서) */
+   svg(w): w가 true면 문제를 푼 뒤의 장면(성공 연출 포함)
+   hot: 클릭하면 코드 창이 열리는 장치 / clues: 클릭하면 말풍선이 뜨는 단서
+   winMs: 성공 연출 시간 / onWin: 연출 중 실행할 동작(11번은 학생이 직접 셀을 넣음) */
 const SC = (()=>{
   const F = 'font-family="Nanum Gothic Coding, monospace"';
   const R = (x,y,w,h,f,ex="") => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f}" ${ex}/>`;
   const T = (x,y,t,o={}) => `<text x="${x}" y="${y}" ${F} font-size="${o.s||14}" fill="${o.f||"#5ccfe0"}" text-anchor="${o.a||"middle"}" ${o.w?'font-weight="700"':""} ${o.ex||""}>${t}</text>`;
   const L = (x1,y1,x2,y2,c,w=1,ex="") => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}" ${ex}/>`;
+  // 성공 연출 조각: 최종 모습이 기본, 애니메이션은 --from/--o0에서 시작
+  const W = (inner, st="") => `<g class="wa" style="${st}">${inner}</g>`;
+  const FL = (inner, st="") => `<g class="wa-flash" style="opacity:0;${st}">${inner}</g>`;
+  const fadeIn = d => `--o0:0;--d:${d}s`;
+  const OK = "#6be39a";
 
-  // 실내 방 배경
+  const HZ = `<pattern id="pHz" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="20" fill="#ffb340"/><rect x="10" width="10" height="20" fill="#1a1a1a"/></pattern>`;
+  function lamps(){
+    return [180,620].map(x=> R(x-60,0,120,8,"#9fd8e6",'opacity=".55"') + `<ellipse cx="${x}" cy="8" rx="210" ry="240" fill="url(#gLamp)"/>`).join("");
+  }
   function room(o={}){
     const wall=o.wall||"#16262b", floor=o.floor||"#0e181b";
     let s = `<defs>
       <linearGradient id="gWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${wall}" stop-opacity=".7"/><stop offset="1" stop-color="${wall}"/></linearGradient>
       <linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${floor}"/><stop offset="1" stop-color="#070c0d"/></linearGradient>
       <radialGradient id="gLamp" cx=".5" cy="0" r="1"><stop offset="0" stop-color="#cfefff" stop-opacity=".22"/><stop offset="1" stop-color="#cfefff" stop-opacity="0"/></radialGradient>
-      <pattern id="pHz" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="20" fill="#ffb340"/><rect x="10" width="10" height="20" fill="#1a1a1a"/></pattern>
-    </defs>`;
+      ${HZ}</defs>`;
     s += R(0,0,800,330,"#0a1214") + R(0,0,800,330,"url(#gWall)");
     for(let x=100;x<800;x+=100) s += L(x,14,x,322,"rgba(255,255,255,.05)",2);
     s += L(0,120,800,120,"rgba(255,255,255,.035)",2);
@@ -1207,13 +1234,12 @@ const SC = (()=>{
     s += `<polygon points="0,330 800,330 800,450 0,450" fill="url(#gFloor)"/>`;
     for(let x=-400;x<=1200;x+=110) s += L(400+(x-400)*0.18,330,x,450,"rgba(92,207,224,.07)");
     [352,380,418].forEach(y=> s += L(0,y,800,y,"rgba(92,207,224,.06)"));
-    if(o.lamps!==false){
-      [180,620].forEach(x=>{ s += R(x-60,0,120,8,"#9fd8e6",'opacity=".55"') + `<ellipse cx="${x}" cy="8" rx="210" ry="240" fill="url(#gLamp)"/>`; });
-    }
+    if(o.lamps!==false) s += lamps();
     return s;
   }
   const dark = (a=.5) => R(0,0,800,450,"#000",`opacity="${a}"`);
   const redAlarm = () => R(0,0,800,450,"#ff3030",'class="sc-alarm" opacity=".10"');
+  const redFade = (a=.25) => W(R(0,0,800,450,"#ff3030"), `opacity:0;--o0:${a};--t:1.4s`);
 
   function monitor(x,y,w,h,lines,o={}){
     const g=o.glow||"#5ccfe0";
@@ -1235,31 +1261,62 @@ const SC = (()=>{
     s += R(x,y,w,14,"url(#pHz)",'opacity=".85"');
     s += R(x+16,y+40,w/2-26,h-60,"rgba(0,0,0,.18)",'rx="3"') + R(x+w/2+10,y+40,w/2-26,h-60,"rgba(0,0,0,.18)",'rx="3"');
     if(o.label) s += T(x+w/2,y-18,o.label,{s:13,f:"#ffb340"});
-    s += `<circle cx="${x+w/2}" cy="${y+26}" r="5" fill="${o.light||"#ff6363"}" class="sc-blink"/>`;
+    s += `<circle cx="${x+w/2}" cy="${y+26}" r="5" fill="#ff6363" ${o.green?"":'class="sc-blink"'}/>`;
+    if(o.green) s += W(`<circle cx="${x+w/2}" cy="${y+26}" r="7" fill="${OK}"/>`, fadeIn(o.green));
+    return s;
+  }
+  // 열리는 문 (open이면 문짝이 양옆으로 밀려 열림)
+  function slidingDoor(x,y,w,h,o={}){
+    const id = "cp"+(o.id||"d"), panel = o.panel||"#33444a";
+    let s = `<defs><clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath></defs>`;
+    s += R(x-10,y-10,w+20,h+10,o.frame||"#1d2a2f");
+    s += R(x,y,w,h, o.open ? (o.light||"#d8f7e6") : "#0b1214");
+    if(o.open) s += W(R(x,y,w,h,"#ffffff",'opacity=".35"'), `--o0:0;--d:${(o.d||0)+.6}s`);
+    const lp = R(x,y,w/2,h,panel) + L(x+w/2-2,y,x+w/2-2,y+h,"#0d1517",3) + R(x+12,y+30,w/2-24,h-50,"rgba(0,0,0,.15)",'rx="3"');
+    const rp = R(x+w/2,y,w/2,h,panel) + L(x+w/2+2,y,x+w/2+2,y+h,"#0d1517",3) + R(x+w/2+12,y+30,w/2-24,h-50,"rgba(0,0,0,.15)",'rx="3"');
+    const t = `--t:${o.t||1.3}s;--d:${o.d||0}s`;
+    s += `<g clip-path="url(#${id})">` +
+      (o.open ? W(lp, `transform:translateX(${-w/2-2}px);--from:translateX(0px);${t}`) + W(rp, `transform:translateX(${w/2+2}px);--from:translateX(0px);${t}`) : lp + rp) + `</g>`;
     return s;
   }
   function keypad(x,y,o={}){
-    let s = R(x,y,64,92,"#1b2529",'rx="5" stroke="#3a4d53" stroke-width="2"') + R(x+8,y+8,48,18,"#06181c",'rx="2"');
-    s += T(x+32,y+22,o.text||"_ _ _",{s:11,f:"#6be39a"});
+    let s = R(x,y,64,92,"#1b2529",'rx="5" stroke="#3a4d53" stroke-width="2"') + R(x+8,y+8,48,18,o.ok?"#0d2b1c":"#06181c",'rx="2"');
+    if(o.digits) s += o.digits.map((dg,k)=> W(T(x+20+k*12,y+22,dg,{s:13,f:OK,w:1}), fadeIn(.3+k*.45))).join("");
+    else s += T(x+32,y+22,"_ _ _",{s:11,f:"#6be39a"});
     for(let r=0;r<4;r++) for(let c=0;c<3;c++) s += R(x+10+c*16,y+32+r*14,12,10,"#3a4d53",'rx="2"');
+    if(o.digits) s += o.digits.map((dg,k)=> W(R(x+10+((k+1)%3)*16,y+32+2*14,12,10,OK,'rx="2"'), `opacity:0;--o0:1;--t:.35s;--d:${.3+k*.45}s`)).join("");
     return s;
   }
-  function tank(x,y,h,lv,label){
+  function tank(x,y,h,lv,label,full){
     let s = R(x,y,46,h,"#2c3d43",'rx="18" stroke="#4a5f66" stroke-width="2"');
     s += R(x+16,y-12,14,14,"#4a5f66",'rx="2"');
-    s += R(x+6,y+h-6-(h-20)*lv,34,(h-20)*lv,"#5ccfe0",'rx="10" opacity=".35"');
+    const lh = h-20;
+    if(full) s += W(R(x+6,y+14,34,lh,"#5ccfe0",'rx="10" opacity=".45"'), `transform-box:fill-box;transform-origin:bottom;--from:scaleY(${lv});--t:2s;--d:.3s`);
+    else s += R(x+6,y+14+lh*(1-lv),34,lh*lv,"#5ccfe0",'rx="10" opacity=".35"');
     s += T(x+23,y+h/2+5,label,{s:12,f:"#dbe6e4",w:1});
     return s;
   }
-  const speaker = (x,y) => `<path d="M${x} ${y} h18 l24 -16 v52 l-24 -16 h-18z" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/><path d="M${x+50} ${y-6} q10 15 0 30 M${x+58} ${y-14} q16 23 0 46" stroke="#ff6363" stroke-width="2" fill="none" class="sc-blink"/>`;
-  const siren = (x,y) => `<path d="M${x-22} ${y+30} v-14 a22 22 0 0 1 44 0 v14z" fill="#ff4545" class="sc-siren"/>` + R(x-28,y+30,56,8,"#2c3d43",'rx="2"') + `<ellipse cx="${x}" cy="${y+80}" rx="140" ry="70" fill="#ff3030" opacity=".08" class="sc-siren"/>`;
+  const speaker = (x,y,quiet) => `<path d="M${x} ${y} h18 l24 -16 v52 l-24 -16 h-18z" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/>` + (quiet ? "" : `<path d="M${x+50} ${y-6} q10 15 0 30 M${x+58} ${y-14} q16 23 0 46" stroke="#ff6363" stroke-width="2" fill="none" class="sc-blink"/>`);
+  function siren(x,y,off){
+    if(off) return `<path d="M${x-22} ${y+30} v-14 a22 22 0 0 1 44 0 v14z" fill="#5a3a3a"/>` + R(x-28,y+30,56,8,"#2c3d43",'rx="2"')
+      + W(`<path d="M${x-22} ${y+30} v-14 a22 22 0 0 1 44 0 v14z" fill="#ff4545"/><ellipse cx="${x}" cy="${y+80}" rx="140" ry="70" fill="#ff3030" opacity=".1"/>`, "opacity:0;--o0:1;--t:1.2s");
+    return `<path d="M${x-22} ${y+30} v-14 a22 22 0 0 1 44 0 v14z" fill="#ff4545" class="sc-siren"/>` + R(x-28,y+30,56,8,"#2c3d43",'rx="2"') + `<ellipse cx="${x}" cy="${y+80}" rx="140" ry="70" fill="#ff3030" opacity=".08" class="sc-siren"/>`;
+  }
   function cables(x1,y1,x2,y2,c="#2b3f45"){ return `<path d="M${x1} ${y1} C ${x1} ${(y1+y2)/2}, ${x2} ${(y1+y2)/2}, ${x2} ${y2}" stroke="${c}" stroke-width="6" fill="none"/>`; }
   function sticky(x,y,t1,t2){
     return `<g transform="rotate(-6 ${x+40} ${y+30})">` + R(x,y,86,62,"#f7d27a") + T(x+43,y+26,t1,{s:12,f:"#3a2a00",w:1}) + T(x+43,y+46,t2,{s:13,f:"#3a2a00",w:1}) + `</g>`;
   }
+  function screenText(x,y,w,h,lines,o={}){
+    // 화면 위를 덮어 새 내용을 보여 줌 (성공 연출)
+    let s = W(R(x,y,w,h,o.bg||"#06181c",'rx="3"'), fadeIn(o.d||.2));
+    lines.forEach((ln,k)=> s += W(T(o.a==="start"?x+10:x+w/2, y+(o.top||22)+k*(o.gap||20), ln.t, {s:ln.s||13, f:ln.f||OK, w:ln.w, a:o.a||"middle"}), fadeIn((o.d||.2)+.35+k*(o.step||.45))));
+    return s;
+  }
+  function banner(x,y,w,t,d,o={}){
+    return FL(R(x-w/2,y-26,w,38,"rgba(6,24,28,.9)",'rx="19" stroke="'+(o.c||OK)+'" stroke-width="2"') + T(x,y,t,{s:o.s||18,f:o.c||OK,w:1}), `--d:${d}s;--t:${o.t||2.4}s`);
+  }
   function sky(o={}){
-    let s = `<defs><linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.top||"#070d1f"}"/><stop offset="1" stop-color="${o.bottom||"#1c2b45"}"/></linearGradient>
-      <pattern id="pHz" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="20" fill="#ffb340"/><rect x="10" width="10" height="20" fill="#1a1a1a"/></pattern></defs>`;
+    let s = `<defs><linearGradient id="gSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${o.top||"#070d1f"}"/><stop offset="1" stop-color="${o.bottom||"#1c2b45"}"/></linearGradient>${HZ}</defs>`;
     s += R(0,0,800,450,"url(#gSky)");
     if(o.stars!==false) for(let i=0;i<46;i++){ const x=(i*137)%800, y=(i*61)%200; s += `<circle cx="${x}" cy="${y+6}" r="${i%5===0?1.6:1}" fill="#fff" opacity="${.35+((i*7)%5)/10}"/>`; }
     if(o.moon) s += `<circle cx="${o.moon[0]}" cy="${o.moon[1]}" r="26" fill="#f3efd8"/><circle cx="${o.moon[0]+10}" cy="${o.moon[1]-6}" r="24" fill="${o.top||"#070d1f"}"/>`;
@@ -1267,29 +1324,45 @@ const SC = (()=>{
   }
   const hills = (c1="#0b1626", c2="#0e1d2f") => `<path d="M0 300 Q 120 240 260 290 T 520 280 T 800 270 V450 H0z" fill="${c2}"/><path d="M0 340 Q 200 300 400 335 T 800 320 V450 H0z" fill="${c1}"/>`;
   function trees(xs, base, c="#07101b"){ return xs.map(([x,h])=>`<polygon points="${x},${base-h} ${x-h*0.32},${base} ${x+h*0.32},${base}" fill="${c}"/>` ).join(""); }
+  function cellShape(label){ return R(-12,-26,24,52,"#6be39a",'rx="5" opacity=".9"') + R(-6,-32,12,6,"#6be39a") + T(0,6,label,{s:11,f:"#06181c",w:1}); }
 
-  /* ----- 15개 장면 ----- */
   const S = [];
-  // 1 연구소 실험실
+  /* 1 연구소 실험실 — 컴퓨터가 켜짐 */
   S.push({
-    svg: room() +
+    winMs: 3000,
+    svg: w => room() +
       R(40,70,190,10,"#33444a") + R(40,150,190,10,"#33444a") + flask(70,26,"#6be39a") + flask(130,26,"#5ccfe0") + beaker(170,36,"#ff9ad5") + beaker(60,116,"#f7d27a") + flask(120,106,"#b6a1ff") + beaker(180,116,"#5ccfe0") +
       desk(30,300,300) + flask(90,242,"#6be39a") + beaker(150,266,"#5ccfe0") + beaker(190,266,"#ff9ad5") +
-      desk(430,300,330) + monitor(480,140,220,140,["SYSTEM OFFLINE","부팅 메시지 대기 중",">"],{cursor:true}) + R(520,288,140,10,"#25343a",'rx="3"'),
+      desk(430,300,330) +
+      (w ? W(`<ellipse cx="590" cy="210" rx="190" ry="120" fill="${OK}" opacity=".12"/>`, fadeIn(.4)) +
+           monitor(480,140,220,140,[],{screen:"#06181c"}) +
+           W(R(488,148,204,124,"#e8fff6",'rx="3"'), "opacity:0;--o0:.95;--t:.9s") +
+           W(T(498,170,"SYSTEM ONLINE",{s:14,f:OK,w:1,a:"start"}), fadeIn(.7)) +
+           W(T(498,192,"시스템 재부팅 완료",{s:13,f:"#dbe6e4",a:"start"}), fadeIn(1.2)) +
+           W(T(498,214,"> 보안망 연결됨 ✓",{s:13,f:OK,a:"start"}), fadeIn(1.7)) +
+           W(R(498,226,170,6,"#0f3b24",'rx="3"') + R(498,226,170,6,OK,'rx="3"'), fadeIn(2.0))
+         : monitor(480,140,220,140,["SYSTEM OFFLINE","부팅 메시지 대기 중",">"],{cursor:true})) +
+      R(520,288,140,10,"#25343a",'rx="3"'),
     hot:{x:476,y:136,w:228,h:148,label:"실험실 컴퓨터"},
     clues:[
       {x:40,y:20,w:190,h:150,text:"선반 위 플라스크에서 형광 액체가 일렁인다. 손대지 않는 게 좋겠다."},
       {x:30,y:236,w:300,h:64,text:"실험 기록지에는 '파이썬 보안 시스템 v1'이라고만 적혀 있다."}
     ]
   });
-  // 2 비상 전원 장치
+  /* 2 비상 전원 장치 — 220V 입력, 불이 켜짐 */
   S.push({
-    svg: room({lamps:false, wall:"#121e22"}) + dark(.35) +
+    winMs: 3000,
+    svg: w => room({lamps:false, wall:"#121e22"}) +
+      (w ? W(lamps(), fadeIn(1.6)) + W(dark(.35), "opacity:0;--o0:1;--t:1.2s;--d:1.5s") : dark(.35)) +
       `<ellipse cx="470" cy="200" rx="260" ry="200" fill="#ffb340" opacity=".06"/>` +
       R(330,60,280,240,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="3"') + R(330,60,280,18,"url(#pHz)") +
-      R(360,100,220,70,"#06181c",'rx="4"') + T(470,145,"- - - V",{s:30,f:"#ffb340",w:1,ex:'class="sc-blink"'}) +
-      R(370,195,60,80,"#2c3d43",'rx="4"') + R(392,175,16,50,"#ff6363",'rx="4"') + T(400,292,"OFF",{s:12,f:"#8aa1a0"}) +
-      [470,510,550].map(x=>`<circle cx="${x}" cy="230" r="12" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/>`).join("") +
+      R(360,100,220,70,"#06181c",'rx="4"') +
+      (w ? ["2","2","0"].map((dg,k)=>W(T(425+k*26,145,dg,{s:30,f:OK,w:1}), fadeIn(.3+k*.4))).join("") + W(T(520,145,"V",{s:30,f:OK,w:1}), fadeIn(1.4))
+         : T(470,145,"- - - V",{s:30,f:"#ffb340",w:1,ex:'class="sc-blink"'})) +
+      R(370,195,60,80,"#2c3d43",'rx="4"') +
+      (w ? W(R(392,160,16,50,OK,'rx="4"'), "--from:translateY(25px);--d:1.4s;--t:.5s") + W(T(400,292,"ON",{s:12,f:OK,w:1}), fadeIn(1.5))
+         : R(392,175,16,50,"#ff6363",'rx="4"') + T(400,292,"OFF",{s:12,f:"#8aa1a0"})) +
+      [470,510,550].map((x,k)=>`<circle cx="${x}" cy="230" r="12" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/>` + (w ? W(`<circle cx="${x}" cy="230" r="6" fill="${OK}"/>`, fadeIn(1.6+k*.15)) : "")).join("") +
       cables(360,300,200,330) + cables(580,300,720,330) + cables(470,60,470,0) +
       R(100,150,130,80,"#ffb340",'rx="4"') + T(165,182,"⚡ 비상 전원",{s:14,f:"#1b1305",w:1}) + T(165,206,"숫자만 입력",{s:13,f:"#1b1305"}),
     hot:{x:352,y:92,w:236,h:86,label:"전원 장치 화면"},
@@ -1298,36 +1371,46 @@ const SC = (()=>{
       {x:360,y:172,w:80,h:110,text:"레버를 당겨 봤지만 꿈쩍도 안 한다. 화면에 숫자를 먼저 보내야 하는 것 같다."}
     ]
   });
-  // 3 경고 방송
+  /* 3 경고 방송 — 방송이 나가고 꺼짐 */
   S.push({
-    svg: room({wall:"#1e1a1c"}) + redAlarm() +
-      speaker(80,70) + speaker(640,70) +
+    winMs: 3400,
+    svg: w => room({wall:"#1e1a1c"}) + (w ? redFade(.14) : redAlarm()) +
+      speaker(80,70,w) + speaker(640,70,w) +
+      (w ? FL(T(400,110,"“경고”",{s:22,f:"#ff6363",w:1}), "--d:.2s;--t:.9s") + FL(T(400,110,"“산소 부족”",{s:22,f:"#ff6363",w:1}), "--d:1.0s;--t:.9s") + FL(T(400,110,"“즉시 대피”",{s:22,f:"#ff6363",w:1}), "--d:1.8s;--t:.9s") : "") +
       desk(240,300,340) + R(300,190,220,96,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + R(314,202,192,46,"#06181c",'rx="3"') +
-      T(410,224,"방송 대기",{s:14,f:"#ff6363",w:1}) + T(410,242,"한 줄씩 송출됩니다",{s:11,f:"#8aa1a0"}) +
-      [330,360,390,420,450,480].map((x,i)=>R(x,258,18,18,i===0?"#ff6363":"#3a4d53",'rx="3"')).join("") +
+      (w ? W(T(410,224,"방송 종료 ✓",{s:15,f:OK,w:1}), fadeIn(2.6)) + W(T(410,242,"3줄 송출 완료",{s:11,f:"#8aa1a0"}), fadeIn(2.8))
+         : T(410,224,"방송 대기",{s:14,f:"#ff6363",w:1}) + T(410,242,"한 줄씩 송출됩니다",{s:11,f:"#8aa1a0"})) +
+      [330,360,390,420,450,480].map((x,i)=>R(x,258,18,18,(!w&&i===0)?"#ff6363":"#3a4d53",'rx="3"')).join("") +
       `<path d="M610 300 v-70" stroke="#4a5f66" stroke-width="4"/><circle cx="610" cy="222" r="12" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/>` +
-      R(340,30,120,36,"#ff4545",'rx="4" class="sc-blink"') + T(400,54,"ON AIR",{s:16,f:"#fff",w:1}),
+      (w ? R(340,30,120,36,"#3a3a3a",'rx="4"') + T(400,54,"OFF AIR",{s:16,f:"#8aa1a0",w:1}) + W(R(340,30,120,36,"#ff4545",'rx="4"') + T(400,54,"ON AIR",{s:16,f:"#fff",w:1}), "opacity:0;--o0:1;--t:.4s;--d:2.5s")
+         : R(340,30,120,36,"#ff4545",'rx="4" class="sc-blink"') + T(400,54,"ON AIR",{s:16,f:"#fff",w:1})),
     hot:{x:296,y:186,w:228,h:104,label:"방송 콘솔"},
     clues:[
       {x:70,y:40,w:110,h:70,text:"지지직… 스피커가 방송을 기다리고 있다. 방송은 한 줄에 한 문장씩 나간다."},
       {x:590,y:200,w:40,h:100,text:"마이크는 고장 났다. 콘솔에 직접 입력해야 한다."}
     ]
   });
-  // 4 출입 카드
+  /* 4 출입 카드 — 카드가 인식됨 */
   S.push({
-    svg: room() + door(290,90,220,232,{label:"보안 등급 3 이상 출입 가능"}) +
+    winMs: 3000,
+    svg: w => room() + door(290,90,220,232,{label:"보안 등급 3 이상 출입 가능", green: w ? 1.6 : 0}) +
       R(560,170,70,110,"#1b2529",'rx="6" stroke="#3a4d53" stroke-width="2"') + R(570,182,50,30,"#06181c",'rx="2"') + T(595,202,"CARD",{s:11,f:"#6be39a"}) +
-      R(576,226,38,6,"#0a1012") + `<circle cx="595" cy="258" r="6" fill="#ff6363" class="sc-blink"/>` +
-      `<g transform="rotate(-12 150 380)">` + R(110,360,84,54,"#dbe6e4",'rx="4"') + R(118,370,22,26,"#8aa1a0") + L(148,374,184,374,"#25343a",3) + L(148,386,176,386,"#25343a",3) + `</g>`,
+      R(576,226,38,6,"#0a1012") + `<circle cx="595" cy="258" r="6" fill="#ff6363" ${w?"":'class="sc-blink"'}/>` +
+      (w ? W(R(571,196,48,32,"#dbe6e4",'rx="3"') + R(575,200,12,14,"#8aa1a0") + L(591,204,613,204,"#25343a",2) + L(591,212,609,212,"#25343a",2), "--from:translate(-440px,170px);--t:1.1s") +
+           W(R(570,182,50,30,"#0d2b1c",'rx="2"') + T(595,202,"✓ OK",{s:12,f:OK,w:1}), fadeIn(1.2)) +
+           W(`<circle cx="595" cy="258" r="7" fill="${OK}"/>`, fadeIn(1.2)) + banner(400,380,220,"카드 인식 완료",1.5,{t:1.6})
+         : `<g transform="rotate(-12 150 380)">` + R(110,360,84,54,"#dbe6e4",'rx="4"') + R(118,370,22,26,"#8aa1a0") + L(148,374,184,374,"#25343a",3) + L(148,386,176,386,"#25343a",3) + `</g>`),
     hot:{x:552,y:162,w:86,h:126,label:"카드 인식기"},
     clues:[
       {x:290,y:56,w:220,h:30,text:"문 위 안내판: 보안 등급 3 이상만 출입할 수 있다."},
       {x:100,y:350,w:110,h:80,text:"바닥에 떨어진 연구원 카드. 이름 부분이 긁혀서 읽을 수 없다."}
     ]
   });
-  // 5 해제 코드
+  /* 5 해제 코드 — 키패드에 888 입력 */
   S.push({
-    svg: room() + door(250,90,240,232,{label:"LAB-05"}) + keypad(530,160,{text:"_ _ _"}) +
+    winMs: 2900,
+    svg: w => room() + door(250,90,240,232,{label:"LAB-05", green: w ? 1.8 : 0}) + keypad(530,160, w ? {digits:["8","8","8"]} : {}) +
+      (w ? W(R(530,160,64,92,"none",'rx="5" stroke="#6be39a" stroke-width="3"'), fadeIn(1.7)) + banner(560,290,170,"888 입력 완료",1.8,{t:1.0}) : "") +
       sticky(330,170,"해제 코드 =","37 × 24") +
       R(640,60,120,90,"#1f2c31",'rx="4" stroke="#3a4d53" stroke-width="2"') + T(700,95,"보안 레벨",{s:12,f:"#8aa1a0"}) + T(700,125,"★★☆",{s:18,f:"#ffb340"}),
     hot:{x:522,y:152,w:80,h:108,label:"숫자 키패드"},
@@ -1335,41 +1418,62 @@ const SC = (()=>{
       {x:326,y:160,w:96,h:80,text:"쪽지: 해제 코드 = 37 × 24. 손으로 계산하지 말고 파이썬에게 시키자!"}
     ]
   });
-  // 6 경보 장치
+  /* 6 경보 장치 — 경보가 멈춤 */
   S.push({
-    svg: room({wall:"#211a1b"}) + redAlarm() + siren(200,18) + siren(600,18) +
-      R(310,120,180,190,"#1f2c31",'rx="6" stroke="#ff6363" stroke-width="2"') + R(326,136,148,60,"#06181c",'rx="3"') +
-      T(400,160,"ALARM",{s:16,f:"#ff6363",w:1,ex:'class="sc-blink"'}) + T(400,184,"패턴·암호 입력",{s:11,f:"#8aa1a0"}) +
-      R(350,214,100,70,"#ff4545",'rx="50" opacity=".85"') + T(400,255,"STOP",{s:16,f:"#fff",w:1}) +
-      T(130,250,"삐—",{s:28,f:"#ff6363",w:1,ex:'class="sc-blink"'}) + T(670,250,"삐—",{s:28,f:"#ff6363",w:1,ex:'class="sc-blink"'}),
+    winMs: 3000,
+    svg: w => room({wall:"#211a1b"}) + (w ? redFade(.25) : redAlarm()) + siren(200,18,w) + siren(600,18,w) +
+      R(310,120,180,190,"#1f2c31",'rx="6" stroke="'+(w?"#3a4d53":"#ff6363")+'" stroke-width="2"') + R(326,136,148,60,"#06181c",'rx="3"') +
+      (w ? W(T(400,160,"ALARM OFF",{s:16,f:OK,w:1}), fadeIn(.8)) + W(T(400,184,"경보 해제 완료",{s:11,f:"#8aa1a0"}), fadeIn(1.0)) +
+           W(R(350,214,100,70,"#3a4d53",'rx="50"') + T(400,255,"STOP",{s:16,f:"#8aa1a0",w:1}), fadeIn(.8)) +
+           W(R(350,214,100,70,"#ff4545",'rx="50"') + T(400,255,"STOP",{s:16,f:"#fff",w:1}), "opacity:0;--o0:1;--t:.3s;--d:.6s") +
+           FL(T(130,250,"삐—",{s:28,f:"#ff6363",w:1}) + T(670,250,"삐—",{s:28,f:"#ff6363",w:1}), "--t:.8s") +
+           W(T(400,370,"……조용해졌다",{s:16,f:"#8aa1a0"}), fadeIn(1.6))
+         : T(400,160,"ALARM",{s:16,f:"#ff6363",w:1,ex:'class="sc-blink"'}) + T(400,184,"패턴·암호 입력",{s:11,f:"#8aa1a0"}) +
+           R(350,214,100,70,"#ff4545",'rx="50" opacity=".85"') + T(400,255,"STOP",{s:16,f:"#fff",w:1}) +
+           T(130,250,"삐—",{s:28,f:"#ff6363",w:1,ex:'class="sc-blink"'}) + T(670,250,"삐—",{s:28,f:"#ff6363",w:1,ex:'class="sc-blink"'})),
     hot:{x:302,y:112,w:196,h:206,label:"경보 제어판"},
     clues:[
       {x:160,y:18,w:80,h:60,text:"삐삐삐삐삐! 경보음이 다섯 번씩 반복해서 울린다."},
       {x:340,y:208,w:120,h:82,text:"버튼 아래 작은 글씨: 해제 암호 = '경보' + '해제'"}
     ]
   });
-  // 7 구역 표지판
+  /* 7 구역 표지판 — 숨겨진 문이 나타남 */
   S.push({
-    svg: room() +
-      `<path d="M40 330 V140 a90 90 0 0 1 180 0 V330z" fill="#05090a"/><path d="M580 330 V140 a90 90 0 0 1 180 0 V330z" fill="#05090a"/>` +
-      T(130,120,"A 구역 ←",{s:16,f:"#8aa1a0"}) + T(670,120,"→ C 구역",{s:16,f:"#8aa1a0"}) +
+    winMs: 3200,
+    svg: w => room() +
+      `<path d="M20 330 V160 a75 75 0 0 1 150 0 V330z" fill="#05090a"/><path d="M630 330 V160 a75 75 0 0 1 150 0 V330z" fill="#05090a"/>` +
+      T(95,140,"A 구역 ←",{s:15,f:"#8aa1a0"}) + T(705,140,"→ C 구역",{s:15,f:"#8aa1a0"}) +
+      (w ? W(R(512,126,106,204,"none",'rx="2" stroke="#6be39a" stroke-width="3"'), fadeIn(.9)) +
+           W(`<ellipse cx="565" cy="230" rx="110" ry="140" fill="${OK}" opacity=".12"/>`, fadeIn(1.2)) +
+           slidingDoor(515,130,100,200,{open:true,id:"h7",d:1.4,panel:"#1b2c31",frame:"#16262b",light:"#d8f7e6"}) +
+           W(T(565,116,"숨겨진 문",{s:14,f:OK,w:1}), fadeIn(1.4))
+         : "") +
       R(392,170,16,170,"#33444a") + R(300,110,200,80,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="3"') + R(312,122,176,56,"#06181c",'rx="3"') +
-      T(400,148,"구역 이름 입력",{s:13,f:"#ffb340"}) + T(400,168,"_____ 구역 통과",{s:12,f:"#7fa7ad"}) +
+      (w ? screenText(312,122,176,56,[{t:"B-7 구역 통과",s:15,w:1},{t:"→ 숨겨진 통로 개방",s:11,f:"#8aa1a0"}],{top:24}) :
+           T(400,148,"구역 이름 입력",{s:13,f:"#ffb340"}) + T(400,168,"_____ 구역 통과",{s:12,f:"#7fa7ad"})) +
       `<polygon points="330,400 470,400 450,370 350,370" fill="#ffb340" opacity=".25"/>` + T(400,392,"B-7",{s:16,f:"#ffb340",w:1}),
     hot:{x:294,y:104,w:212,h:92,label:"구역 표지판"},
     clues:[
       {x:330,y:364,w:140,h:40,text:"바닥에 페인트로 'B-7'이라고 적혀 있다. 지금 있는 구역이다."},
-      {x:40,y:60,w:180,h:270,text:"A 구역은 깜깜하다. 표지판이 켜져야 길이 보일 것 같다."}
+      {x:20,y:80,w:150,h:250,text:"A 구역은 깜깜하다. 저쪽은 막다른 길 같다."},
+      {x:515,y:130,w:100,h:200,text:"벽에 가는 틈이 보인다… 표지판과 연결된 것 같다."}
     ]
   });
-  // 8 산소 공급 복도
+  /* 8 산소 공급 복도 — 70% → 100% */
   S.push({
-    svg: room({wall:"#14232a"}) + R(0,0,800,450,"#ffb340",'opacity=".05" class="sc-blink"') +
-      tank(60,150,170,.7,"O₂") + tank(120,150,170,.7,"O₂") + tank(180,150,170,.7,"O₂") +
-      R(270,130,120,90,"#1f2c31",'rx="45" stroke="#3a4d53" stroke-width="3"') + `<path d="M285 200 A 60 60 0 0 1 375 200" stroke="#3a4d53" stroke-width="10" fill="none"/><path d="M285 200 A 60 60 0 0 1 350 154" stroke="#ffb340" stroke-width="10" fill="none"/>` +
-      T(330,200,"70%",{s:16,f:"#ffb340",w:1}) +
+    winMs: 3200,
+    onWin: (el) => {
+      const t = el.querySelector("#o2num"); if(!t) return;
+      let v = 70; const id = setInterval(()=>{ v += 1; t.textContent = v + "%"; if(v >= 100) clearInterval(id); }, 55);
+    },
+    svg: w => room({wall:"#14232a"}) + (w ? W(R(0,0,800,450,"#ffb340"), "opacity:0;--o0:.06;--t:1.6s") : R(0,0,800,450,"#ffb340",'opacity=".05" class="sc-blink"')) +
+      tank(60,150,170,.7,"O₂",w) + tank(120,150,170,.7,"O₂",w) + tank(180,150,170,.7,"O₂",w) +
+      R(270,130,120,90,"#1f2c31",'rx="45" stroke="#3a4d53" stroke-width="3"') + `<path d="M285 200 A 60 60 0 0 1 375 200" stroke="#3a4d53" stroke-width="10" fill="none"/>` +
+      (w ? `<path d="M285 200 A 60 60 0 0 1 375 200" stroke="${OK}" stroke-width="10" fill="none" pathLength="100" stroke-dasharray="100 100" class="wa-arc"/>` + T(330,200,"100%",{s:16,f:OK,w:1,ex:'id="o2num"'})
+         : `<path d="M285 200 A 60 60 0 0 1 375 200" stroke="#ffb340" stroke-width="10" fill="none" pathLength="100" stroke-dasharray="70 100"/>` + T(330,200,"70%",{s:16,f:"#ffb340",w:1})) +
       R(500,130,230,150,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + R(514,144,202,80,"#06181c",'rx="3"') +
-      T(615,172,"산소 공급 제어",{s:14,f:"#5ccfe0",w:1}) + T(615,196,"남은 양 계산 필요",{s:12,f:"#8aa1a0"}) + T(615,214,"⚠ 1분에 3%씩 감소",{s:12,f:"#ffb340"}) +
+      (w ? screenText(514,144,202,80,[{t:"산소 공급 완료",s:15,w:1},{t:"산소 100% 충전",s:12,f:"#dbe6e4"},{t:"✓ 안전",s:12}],{top:26,d:2.2,step:.3})
+         : T(615,172,"산소 공급 제어",{s:14,f:"#5ccfe0",w:1}) + T(615,196,"남은 양 계산 필요",{s:12,f:"#8aa1a0"}) + T(615,214,"⚠ 1분에 3%씩 감소",{s:12,f:"#ffb340"})) +
       cables(240,240,500,250,"#24363b"),
     hot:{x:494,y:124,w:242,h:162,label:"산소 제어판"},
     clues:[
@@ -1377,103 +1481,184 @@ const SC = (()=>{
       {x:60,y:140,w:166,h:180,text:"산소 탱크. 12분 뒤에는 얼마나 남을까?"}
     ]
   });
-  // 9 보안 검문소
+  /* 9 보안 검문소 — 보안문이 열림 */
   S.push({
-    svg: room() +
-      R(120,250,560,10,"#ff6363",'opacity=".7"') + R(380,170,40,160,"#2c3d43") + R(160,226,480,18,"url(#pHz)",'opacity=".9"') +
+    winMs: 3200,
+    svg: w => room() +
+      slidingDoor(230,80,220,242,{open:w,id:"g9",d:1.3,light:"#d8f7e6"}) + T(340,62,"SECURITY GATE",{s:13,f:w?OK:"#ffb340",w:1}) +
+      (w ? W(R(120,256,560,6,"#ff6363",'opacity=".7"'), "opacity:0;--o0:1;--t:.5s;--d:.6s") : R(120,256,560,6,"#ff6363",'opacity=".7"')) +
+      R(140,190,40,140,"#2c3d43") +
+      (w ? W(R(180,226,300,18,"url(#pHz)",'opacity=".95"'), "transform-origin:180px 235px;transform:rotate(-80deg);--from:rotate(0deg);--d:.7s;--t:1.1s")
+         : R(180,226,300,18,"url(#pHz)",'opacity=".95"')) +
       R(500,110,150,210,"#1b2529",'rx="8" stroke="#3a4d53" stroke-width="2"') + R(516,126,118,90,"#06181c",'rx="4"') +
-      T(575,160,"SCAN",{s:16,f:"#6be39a",w:1}) + T(575,186,"이름을 입력하세요",{s:11,f:"#8aa1a0"}) +
-      `<circle cx="575" cy="262" r="24" fill="#0a1012" stroke="#6be39a" stroke-width="2"/><circle cx="575" cy="262" r="8" fill="#6be39a" class="sc-blink"/>` +
-      R(110,20,60,26,"#2c3d43",'rx="4"') + `<circle cx="160" cy="46" r="10" fill="#0a1012" stroke="#4a5f66" stroke-width="2"/><circle cx="160" cy="46" r="3" fill="#ff6363" class="sc-blink"/>`,
+      (w ? screenText(516,126,118,90,[{t:"승인 ✓",s:18,w:1},{t:"출입 허가",s:12,f:"#dbe6e4"}],{top:38,d:.1}) + `<circle cx="575" cy="262" r="24" fill="#0a1012" stroke="${OK}" stroke-width="3"/><circle cx="575" cy="262" r="10" fill="${OK}"/>`
+         : T(575,160,"SCAN",{s:16,f:"#6be39a",w:1}) + T(575,186,"이름을 입력하세요",{s:11,f:"#8aa1a0"}) +
+           `<circle cx="575" cy="262" r="24" fill="#0a1012" stroke="#6be39a" stroke-width="2"/><circle cx="575" cy="262" r="8" fill="#6be39a" class="sc-blink"/>`) +
+      R(60,20,60,26,"#2c3d43",'rx="4"') + `<circle cx="110" cy="46" r="10" fill="#0a1012" stroke="#4a5f66" stroke-width="2"/><circle cx="110" cy="46" r="3" fill="${w?OK:"#ff6363"}" ${w?"":'class="sc-blink"'}/>`,
     hot:{x:492,y:102,w:166,h:226,label:"신원 스캐너"},
     clues:[
-      {x:100,y:14,w:90,h:50,text:"감시 카메라가 나를 따라 움직인다…"},
-      {x:160,y:222,w:330,h:30,text:"차단봉이 내려와 있다. 스캐너가 출입을 승인해야 올라간다."}
+      {x:50,y:14,w:90,h:50,text:"감시 카메라가 나를 따라 움직인다…"},
+      {x:180,y:222,w:300,h:30,text:"차단봉이 내려와 있다. 스캐너가 출입을 승인해야 올라간다."},
+      {x:230,y:80,w:220,h:140,text:"굳게 닫힌 보안문. 스캐너 승인이 필요하다."}
     ]
   });
-  // 10 탈출 경로 등록
+  /* 10 탈출 경로 등록 — 엘리베이터가 열림 */
   S.push({
-    svg: room() +
-      R(230,70,240,260,"#1d2a2f") + R(246,90,100,240,"#33444a") + R(354,90,100,240,"#33444a") + L(350,90,350,330,"#0d1517",4) +
-      R(320,40,60,22,"#06181c",'rx="3"') + T(350,57,"B1 ▼",{s:13,f:"#ff6363",w:1}) +
-      R(484,180,22,44,"#1b2529",'rx="3"') + `<circle cx="495" cy="194" r="5" fill="#3a4d53"/><circle cx="495" cy="210" r="5" fill="#3a4d53"/>` +
-      desk(560,300,200) + monitor(570,150,180,130,["중앙 통제실","코드명: ____","목적지: ____"],{cursor:false}),
+    winMs: 3200,
+    svg: w => room() +
+      slidingDoor(246,90,208,240,{open:w,id:"e10",d:1.2,light:"#fff3d6"}) +
+      (w ? W(`<ellipse cx="350" cy="330" rx="150" ry="40" fill="#fff3d6" opacity=".18"/>`, fadeIn(1.6)) : "") +
+      R(320,40,60,22,"#06181c",'rx="3"') + (w ? W(T(350,57,"OPEN",{s:13,f:OK,w:1}), fadeIn(1.0)) + W(T(350,57,"B1 ▼",{s:13,f:"#ff6363",w:1}), "opacity:0;--o0:1;--t:.3s;--d:.8s") : T(350,57,"B1 ▼",{s:13,f:"#ff6363",w:1})) +
+      R(484,180,22,44,"#1b2529",'rx="3"') + `<circle cx="495" cy="194" r="5" fill="${w?OK:"#3a4d53"}"/><circle cx="495" cy="210" r="5" fill="#3a4d53"/>` +
+      desk(560,300,200) +
+      (w ? monitor(570,150,180,130,[]) + screenText(578,158,164,114,[{t:"경로 등록 완료 ✓",s:13,w:1},{t:"코드명 확인",s:12,f:"#dbe6e4"},{t:"목적지 확인",s:12,f:"#dbe6e4"},{t:"엘리베이터 호출",s:12}],{a:"start",top:22,d:.1,step:.25})
+         : monitor(570,150,180,130,["중앙 통제실","코드명: ____","목적지: ____"])),
     hot:{x:566,y:146,w:188,h:138,label:"통제 컴퓨터"},
     clues:[
-      {x:230,y:70,w:240,h:260,text:"엘리베이터가 멈춰 있다. 버튼을 눌러도 반응이 없다."},
+      {x:236,y:80,w:228,h:250,text:"엘리베이터가 멈춰 있다. 버튼을 눌러도 반응이 없다."},
       {x:478,y:174,w:34,h:56,text:"호출 버튼. 통제 컴퓨터에 경로를 먼저 등록해야 한다."}
     ]
   });
-  // 11 에너지 셀 충전
+  /* 11 에너지 셀 충전 — 학생이 직접 셀을 슬롯에 넣음 */
+  const CELL_FLOOR = [[110,372,-12],[165,380,6],[220,370,-4],[275,378,10]];
+  const CELL_SLOT = k => [337+k*44, 172, 0];
   S.push({
-    svg: room({wall:"#1a2428", lamps:false}) + dark(.2) +
-      R(0,0,800,330,"#2a383d",'opacity=".35"') + L(60,230,740,230,"#4a5f66",6) + R(380,0,40,30,"#ffb340",'class="sc-blink" opacity=".7"') +
-      R(300,90,200,150,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + T(400,116,"ENERGY CELL",{s:13,f:"#6be39a",w:1}) +
-      [0,1,2,3].map(k=>R(320+k*44,130,34,84,"#0a1012",'rx="4" stroke="#3a4d53" stroke-width="2"')).join("") +
-      [0,1,2].map(k=>`<g transform="translate(${120+k*44} 372) rotate(${k*14-10})">` + R(-12,-26,24,52,"#6be39a",'rx="5" opacity=".85"') + R(-6,-32,12,6,"#6be39a") + T(0,6,"25",{s:11,f:"#06181c",w:1}) + `</g>`).join(""),
+    interactive: true,
+    svg: (w, mode) => {
+      const filled = mode === "static";
+      let s = room({wall:"#1a2428", lamps:false}) + dark(.2) +
+        R(0,0,800,330,"#2a383d",'opacity=".35"') + L(60,230,740,230,"#4a5f66",6) + R(380,0,40,30,"#ffb340",'class="sc-blink" opacity=".7"') +
+        R(300,90,200,150,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + T(400,116,"ENERGY CELL",{s:13,f:"#6be39a",w:1}) +
+        [0,1,2,3].map(k=>R(320+k*44,130,34,84,"#0a1012",'rx="4" stroke="#3a4d53" stroke-width="2"')).join("") +
+        R(318,222,164,10,"#0a1012",'rx="3"') + [0,1,2,3].map(k=>R(320+k*41,223,38,8,OK,`rx="2" class="sc-seg" data-k="${k}" style="opacity:${filled?1:0}"`)).join("");
+      if(w){
+        s += CELL_FLOOR.map(([x,y,r],k)=>{
+          const [sx,sy] = CELL_SLOT(k);
+          const tr = filled ? `translate(${sx}px,${sy}px)` : `translate(${x}px,${y}px) rotate(${r}deg)`;
+          return `<g class="sc-cell ${filled?"in":""}" data-k="${k}" style="transform:${tr}" ${filled?"":'tabindex="0" role="button" aria-label="에너지 셀 넣기"'}>${cellShape("25")}</g>`;
+        }).join("");
+        s += `<g id="cellMsg">` + (filled ? R(250,268,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#6be39a" stroke-width="2"') + T(400,294,"⚡ 에너지 100% 충전 완료!",{s:16,f:OK,w:1})
+             : R(220,268,360,40,"rgba(6,24,28,.92)",'rx="20" stroke="#ffb340" stroke-width="2"') + T(400,294,"에너지 셀을 클릭해서 슬롯에 넣으세요 (0/4)",{s:14,f:"#ffb340",w:1,ex:'class="sc-blink"'})) + `</g>`;
+      }else{
+        s += CELL_FLOOR.map(([x,y,r])=>`<g transform="translate(${x} ${y}) rotate(${r})">${cellShape("25")}</g>`).join("");
+      }
+      return s;
+    },
+    onWin: (el, done) => {
+      let n = 0;
+      const msg = el.querySelector("#cellMsg");
+      el.querySelectorAll(".sc-cell").forEach(c=>{
+        const put = ()=>{
+          if(c.classList.contains("in")) return;
+          const k = +c.dataset.k, [sx,sy] = CELL_SLOT(n);
+          c.classList.add("in"); c.removeAttribute("tabindex");
+          c.style.transform = `translate(${sx}px,${sy}px)`;
+          const seg = el.querySelector(`.sc-seg[data-k="${n}"]`); if(seg) seg.style.opacity = 1;
+          n++;
+          if(n < 4){
+            msg.querySelector("text").textContent = `에너지 셀을 클릭해서 슬롯에 넣으세요 (${n}/4)`;
+          }else{
+            msg.innerHTML = `<rect x="250" y="268" width="300" height="40" rx="20" fill="rgba(6,24,28,.92)" stroke="#6be39a" stroke-width="2"/><text x="400" y="294" ${F} font-size="16" fill="${OK}" text-anchor="middle" font-weight="700">⚡ 에너지 100% 충전 완료!</text>`;
+            el.querySelectorAll(".sc-seg").forEach(sg=>sg.classList.add("sc-full"));
+            setTimeout(done, 1700);
+          }
+        };
+        c.addEventListener("click", put);
+        c.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); put(); } });
+      });
+    },
     hot:{x:294,y:84,w:212,h:162,label:"셀 충전 슬롯"},
     clues:[
-      {x:90,y:330,w:150,h:80,text:"바닥에 굴러다니는 에너지 셀. 하나에 에너지가 25씩 들어 있다고 적혀 있다."},
+      {x:85,y:330,w:215,h:80,text:"바닥에 굴러다니는 에너지 셀. 하나에 에너지가 25씩 들어 있다고 적혀 있다."},
       {x:370,y:0,w:60,h:34,text:"비상등만 깜빡인다. 엘리베이터가 층 사이에 멈췄다."}
     ]
   });
-  // 12 최종 탈출 – 셔틀 발사
-  S.push({
-    svg: room({wall:"#15232a"}) +
-      `<path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#05090a"/>` + T(670,120,"EXIT →",{s:16,f:"#6be39a",w:1}) +
-      L(40,360,800,360,"#4a5f66",4) + L(40,380,800,380,"#4a5f66",4) +
-      `<path d="M120 340 h300 q60 0 80 -40 q-20 -40 -80 -40 h-300 q-30 0 -30 40 t30 40z" fill="#dbe6e4"/>` +
+  /* 12 최종 탈출 – 셔틀 발사 — 셔틀이 EXIT로 이동 */
+  const shuttle = `<path d="M120 340 h300 q60 0 80 -40 q-20 -40 -80 -40 h-300 q-30 0 -30 40 t30 40z" fill="#dbe6e4"/>` +
       R(150,276,60,26,"#06181c",'rx="6"') + R(230,276,60,26,"#06181c",'rx="6"') + R(310,276,60,26,"#06181c",'rx="6"') +
-      R(120,326,380,6,"#ffb340") + T(300,318,"ESCAPE SHUTTLE",{s:12,f:"#25343a",w:1}) +
+      R(120,326,380,6,"#ffb340") + T(300,318,"ESCAPE SHUTTLE",{s:12,f:"#25343a",w:1});
+  S.push({
+    winMs: 3400,
+    svg: w => room({wall:"#15232a"}) +
+      `<path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#05090a"/>` +
+      (w ? W(`<path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#fff6dc" opacity=".25"/>`, fadeIn(.3)) : "") +
+      T(670,120,"EXIT →",{s:16,f:"#6be39a",w:1}) +
+      L(40,360,800,360,"#4a5f66",4) + L(40,380,800,380,"#4a5f66",4) +
+      (w ? W(shuttle, "transform:translateX(560px);opacity:0;--from:translateX(0px);--o0:1;--t:2.4s;--d:.7s") +
+           FL(`<path d="M80 300 h-60 M80 318 h-80 M80 336 h-50" stroke="#ffb340" stroke-width="4" stroke-linecap="round"/>`, "--d:.6s;--t:1.4s") +
+           W(T(300,300,"셔틀 출발 완료",{s:16,f:"#4c6268"}), fadeIn(3.0))
+         : shuttle) +
       R(40,190,90,120,"#33444a",'rx="8"') + T(85,256,"FUEL",{s:13,f:"#ffb340",w:1}) +
       R(170,40,240,110,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + R(184,54,212,82,"#06181c",'rx="3"') +
-      T(290,82,"발사 제어",{s:14,f:"#ffb340",w:1}) + T(290,104,"연료 계산 필요",{s:12,f:"#8aa1a0"}) + T(290,124,"발사 시 연료 150 사용",{s:11,f:"#ff6363"}),
+      (w ? screenText(184,54,212,82,[{t:"발사!",s:18,w:1},{t:"연료 계산 완료",s:12,f:"#dbe6e4"}],{top:32,d:.1})
+         : T(290,82,"발사 제어",{s:14,f:"#ffb340",w:1}) + T(290,104,"연료 계산 필요",{s:12,f:"#8aa1a0"}) + T(290,124,"발사 시 연료 150 사용",{s:11,f:"#ff6363"})),
     hot:{x:164,y:34,w:252,h:122,label:"발사 제어판"},
     clues:[
       {x:40,y:190,w:90,h:120,text:"연료 통 보관함. 통마다 들어 있는 연료량이 다르다."},
       {x:560,y:40,w:220,h:290,text:"터널 끝으로 바깥 빛이 보인다. 셔틀만 출발하면 된다!"}
     ]
   });
-  // 13 보너스 1 신호 증폭기 (야외, 밤)
+  /* 13 보너스 1 신호 증폭기 — 신호 전송 */
   S.push({
-    svg: sky({moon:[680,70]}) + hills() +
+    winMs: 3200,
+    svg: w => sky({moon:[680,70]}) + hills() +
       R(40,190,170,140,"#0d1720") + R(60,210,30,24,"#ffb340",'opacity=".25"') + R(110,210,30,24,"#06181c") + R(160,210,30,24,"#ffb340",'opacity=".15"') + T(125,182,"연구소",{s:12,f:"#4c6268"}) +
       trees([[260,90],[300,120],[700,110],[750,80],[640,70]],345) +
       L(470,330,440,120,"#8aa1a0",3) + L(470,330,500,120,"#8aa1a0",3) + L(450,180,490,180,"#8aa1a0",2) + L(445,250,495,250,"#8aa1a0",2) +
-      `<circle cx="470" cy="112" r="7" fill="#ff6363" class="sc-blink"/><path d="M490 96 q14 16 0 32 M500 86 q24 26 0 52" stroke="#5ccfe0" stroke-width="2" fill="none" class="sc-blink"/>` +
-      R(400,320,140,80,"#2c3d43",'rx="6" stroke="#4a5f66" stroke-width="2"') + R(412,332,116,34,"#06181c",'rx="3"') + T(470,354,"SIGNAL",{s:13,f:"#5ccfe0",w:1}) +
-      [430,460,490].map(x=>`<circle cx="${x}" cy="384" r="7" fill="#3a4d53"/>`).join(""),
+      `<circle cx="470" cy="112" r="7" fill="${w?OK:"#ff6363"}" class="sc-blink"/>` +
+      (w ? [0,1,2].map(k=>`<circle cx="470" cy="112" r="60" fill="none" stroke="#5ccfe0" stroke-width="3" class="wa-wave" style="animation-delay:${k*.55}s"/>`).join("") +
+           W(T(470,40,"SOS 신호 전송 중 → 구조대",{s:15,f:"#5ccfe0",w:1}), fadeIn(.6))
+         : `<path d="M490 96 q14 16 0 32 M500 86 q24 26 0 52" stroke="#5ccfe0" stroke-width="2" fill="none" class="sc-blink"/>`) +
+      R(400,320,140,80,"#2c3d43",'rx="6" stroke="#4a5f66" stroke-width="2"') + R(412,332,116,34,"#06181c",'rx="3"') +
+      (w ? screenText(412,332,116,34,[{t:"전송 완료 ✓",s:13,w:1}],{top:22,d:1.2}) : T(470,354,"SIGNAL",{s:13,f:"#5ccfe0",w:1})) +
+      [430,460,490].map((x,k)=>`<circle cx="${x}" cy="384" r="7" fill="${w?OK:"#3a4d53"}"/>`).join(""),
     hot:{x:394,y:314,w:152,h:92,label:"신호 송신기"},
     clues:[
       {x:40,y:176,w:170,h:154,text:"방금 빠져나온 연구소. 다시는 돌아가고 싶지 않다."},
       {x:432,y:96,w:76,h:60,text:"안테나 끝에서 빨간 불빛이 깜빡인다. 신호를 크게 증폭해야 구조대에 닿는다."}
     ]
   });
-  // 14 보너스 2 구조 차량 잠금장치 (새벽 도로)
+  /* 14 보너스 2 구조 차량 잠금장치 — 차량 문이 열림 */
   S.push({
-    svg: sky({top:"#1b2340", bottom:"#c9875a", stars:false}) + hills("#151a24","#1d2433") +
+    winMs: 3000,
+    svg: w => sky({top:"#1b2340", bottom:"#c9875a", stars:false}) + hills("#151a24","#1d2433") +
       `<polygon points="0,360 800,360 800,450 0,450" fill="#22262c"/>` + [60,220,380,540,700].map(x=>R(x,402,90,8,"#f7d27a",'opacity=".7"')).join("") +
       `<path d="M150 360 v-110 a14 14 0 0 1 14 -14 h250 l70 60 h50 a14 14 0 0 1 14 14 v50z" fill="#e8ecef"/>` +
-      R(150,300,398,14,"#ff4545") + T(280,286,"119 구조대",{s:18,f:"#ff4545",w:1}) +
+      R(150,300,398,14,"#ff4545") + T(300,286,"119 구조대",{s:18,f:"#ff4545",w:1}) +
       R(420,250,60,40,"#1d2a33",'rx="4"') + R(210,226,90,10,"#ff4545",'rx="3" class="sc-siren"') + R(300,226,60,10,"#5c8cff",'rx="3" class="sc-siren"') +
+      /* 뒤쪽 출입문 */
+      R(166,248,66,90,w?"#ffe9a8":"#cfd6db",'rx="3"') +
+      (w ? W(R(166,248,66,90,"#dfe4e8",'rx="3" stroke="#9aa5ad" stroke-width="2"') + R(214,288,10,4,"#5a636b"), "transform:translateX(-70px);--from:translateX(0px);--d:.9s;--t:1.1s") +
+           W(`<ellipse cx="199" cy="340" rx="80" ry="18" fill="#ffe9a8" opacity=".35"/>`, fadeIn(1.4)) + banner(199,228,150,"탑승하세요!",1.6,{t:1.4,s:15})
+         : R(166,248,66,90,"none",'rx="3" stroke="#9aa5ad" stroke-width="2"') + R(214,288,10,4,"#5a636b")) +
       `<circle cx="230" cy="362" r="28" fill="#15181c"/><circle cx="230" cy="362" r="12" fill="#5a636b"/><circle cx="470" cy="362" r="28" fill="#15181c"/><circle cx="470" cy="362" r="12" fill="#5a636b"/>` +
-      R(372,252,38,50,"#1b2529",'rx="4" stroke="#3a4d53" stroke-width="2"') + R(377,258,28,12,"#06181c") + T(391,268,"_ _",{s:9,f:"#6be39a"}) +
+      R(372,252,38,50,"#1b2529",'rx="4" stroke="'+(w?OK:"#3a4d53")+'" stroke-width="2"') + R(377,258,28,12,"#06181c") +
+      (w ? W(T(391,268,"OPEN",{s:8,f:OK,w:1}), fadeIn(.3)) : T(391,268,"_ _",{s:9,f:"#6be39a"})) +
       [0,1,2].map(r=>[0,1].map(c=>R(378+c*14,276+r*8,10,6,"#3a4d53",'rx="1"')).join("")).join(""),
     hot:{x:364,y:244,w:54,h:66,label:"차량 잠금장치"},
     clues:[
       {x:200,y:218,w:170,h:26,text:"경광등이 번쩍인다. 구조대가 와 주었다!"},
-      {x:150,y:270,w:200,h:40,text:"문이 잠겨 있다. 잠금장치가 두 숫자의 덧셈, 뺄셈, 곱셈 결과를 요구한다."}
+      {x:166,y:248,w:66,h:90,text:"차량 뒷문이 잠겨 있다. 잠금장치가 두 숫자의 덧셈, 뺄셈, 곱셈 결과를 요구한다."}
     ]
   });
-  // 15 보너스 3 귀환 보고서 (구조대 본부, 낮)
+  /* 15 보너스 3 귀환 보고서 — 탈출 성공 축하 */
   S.push({
-    svg: room({wall:"#22323a", floor:"#1a2226"}) +
+    winMs: 5600, hideHotWhenSolved: true,
+    svg: w => room({wall:"#22323a", floor:"#1a2226"}) +
       R(60,50,240,170,"#9fd8e6",'opacity=".35"') + L(180,50,180,220,"#33444a",6) + L(60,135,300,135,"#33444a",6) + R(56,46,248,178,"none",'stroke="#33444a" stroke-width="8"') +
       `<circle cx="250" cy="90" r="20" fill="#f7d27a" opacity=".8"/>` +
       R(400,50,320,170,"#dbe6e4",'opacity=".9"') + T(560,80,"구조대 상황판",{s:14,f:"#25343a",w:1}) +
       [0,1,2].map(k=>R(420+k*100,100,80,60,"#8aa1a0",'opacity=".6"')).join("") + L(420,180,700,180,"#ff6363",3) + T(560,206,"연구소 탈출 요원 귀환",{s:12,f:"#25343a"}) +
-      desk(260,320,320) + R(360,250,140,72,"#25343a",'rx="4"') + R(368,258,124,56,"#06181c",'rx="2"') + T(430,282,"탈출 보고서",{s:12,f:"#5ccfe0",w:1}) + T(430,302,"작성 대기",{s:11,f:"#8aa1a0"}) +
-      `<polygon points="340,322 520,322 506,330 354,330" fill="#33444a"/>` + R(520,300,26,22,"#dbe6e4",'rx="3"'),
+      desk(260,320,320) + R(360,250,140,72,"#25343a",'rx="4"') + R(368,258,124,56,"#06181c",'rx="2"') +
+      (w ? screenText(368,258,124,56,[{t:"제출 완료 ✓",s:13,w:1},{t:"임무 종료",s:11,f:"#dbe6e4"}],{top:22,d:.1})
+         : T(430,282,"탈출 보고서",{s:12,f:"#5ccfe0",w:1}) + T(430,302,"작성 대기",{s:11,f:"#8aa1a0"})) +
+      `<polygon points="340,322 520,322 506,330 354,330" fill="#33444a"/>` + R(520,300,26,22,"#dbe6e4",'rx="3"') +
+      (w ? W(R(0,0,800,450,"#000",'opacity=".45"'), fadeIn(.8)) +
+           Array.from({length:36},(_,k)=>{ const c=["#ffb340","#6be39a","#5ccfe0","#ff9ad5","#f7d27a"][k%5]; return `<rect x="${(k*97)%800}" y="${-20-(k*37)%120}" width="8" height="14" fill="${c}" class="wa-fall" style="animation-delay:${(k%9)*.25+.8}s;animation-duration:${2.2+(k%4)*.4}s"/>`; }).join("") +
+           W(R(110,120,580,190,"rgba(6,24,28,.95)",'rx="16" stroke="#ffb340" stroke-width="3"') +
+             T(400,200,"탈출을 성공했습니다!",{s:38,f:"#ffb340",w:1}) + T(400,252,"한 학기 동안 수고 많았어요",{s:22,f:"#dbe6e4",w:1}),
+             "transform-origin:400px 215px;--from:scale(.6);--o0:0;--d:1s;--t:.9s")
+         : ""),
     hot:{x:352,y:244,w:156,h:84,label:"보고서 노트북"},
     clues:[
       {x:400,y:50,w:320,h:170,text:"상황판에 내 이름이 적혀 있다. 보고서만 제출하면 임무 끝!"},
@@ -1483,24 +1668,31 @@ const SC = (()=>{
   return S;
 })();
 
-function renderScene(i){
+// mode: undefined(평소) | "play"(성공 연출 재생) | 푼 방은 자동으로 "static"(연출이 끝난 모습)
+function renderScene(i, mode){
   const sc = SC[i], el = $("scene");
+  const solved = mode === "play" || state.done.includes(i);
+  const m = mode || (solved ? "static" : undefined);
   const opened = isOpened(i);
   const h = sc.hot;
-  const tagW = Math.max(150, h.label.length*13+70);
+  const label = solved ? "✓ 해제 완료" : opened ? "✓ 접속됨 · " + h.label : "▶ " + h.label + " 클릭!";
+  const tagW = Math.max(130, label.length*13+40);
   const tagX = Math.min(Math.max(h.x + h.w/2 - tagW/2, 6), 800 - tagW - 6);
   const tagY = h.y > 44 ? h.y - 38 : h.y + h.h + 8;
+  el.classList.toggle("static", m === "static");
+  el.classList.toggle("playing", m === "play");
   el.innerHTML = `<svg viewBox="0 0 800 450" role="img" aria-label="${esc(ALL[i].room)} 장면">
-    ${sc.svg}
-    ${sc.clues.map((c,k)=>`<rect class="sc-clue" data-k="${k}" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6" tabindex="0" role="button" aria-label="살펴보기"/>`).join("")}
-    <g class="sc-hot ${opened?"on":""}" tabindex="0" role="button" aria-label="${esc(h.label)} 클릭해서 코드 작성">
+    ${sc.svg(solved, m)}
+    ${m === "play" ? "" : sc.clues.map((c,k)=>`<rect class="sc-clue" data-k="${k}" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6" tabindex="0" role="button" aria-label="살펴보기"/>`).join("")}
+    ${m === "play" || (solved && sc.hideHotWhenSolved) ? "" : `<g class="sc-hot ${opened||solved?"on":""}" tabindex="0" role="button" aria-label="${esc(h.label)} 클릭해서 코드 작성">
       <rect class="sc-hot-ring" x="${h.x}" y="${h.y}" width="${h.w}" height="${h.h}" rx="8"/>
       <g class="sc-tag"><rect x="${tagX}" y="${tagY}" width="${tagW}" height="28" rx="14"/>
-      <text x="${tagX+tagW/2}" y="${tagY+19}" text-anchor="middle">${opened ? "✓ 접속됨 · " + esc(h.label) : "▶ " + esc(h.label) + " 클릭!"}</text></g>
-    </g>
+      <text x="${tagX+tagW/2}" y="${tagY+19}" text-anchor="middle">${esc(label)}</text></g>
+    </g>`}
   </svg><div class="sc-bubble" id="scBubble" hidden></div>`;
-  el.querySelector(".sc-hot").addEventListener("click", ()=>openTerminal(i));
-  el.querySelector(".sc-hot").addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openTerminal(i); } });
+  if(m === "play") return;
+  if(el.querySelector(".sc-hot")) el.querySelector(".sc-hot").addEventListener("click", ()=>openTerminal(i));
+  if(el.querySelector(".sc-hot")) el.querySelector(".sc-hot").addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openTerminal(i); } });
   el.querySelectorAll(".sc-clue").forEach(r=>{
     const show = ()=>{
       const c = sc.clues[+r.dataset.k], b = $("scBubble");
@@ -1514,6 +1706,20 @@ function renderScene(i){
     r.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); show(); } });
   });
 }
+
+// 정답을 맞힌 뒤 그림 속 성공 연출을 보여 줌 (11번은 학생이 셀을 다 넣을 때까지 기다림)
+function playWin(i){
+  return new Promise(resolve=>{
+    const sc = SC[i];
+    renderScene(i, "play");
+    const el = $("scene");
+    try{ el.scrollIntoView({block:"nearest", behavior:"smooth"}); }catch(e){}
+    if(sc.interactive){ sc.onWin(el, resolve); return; }
+    if(sc.onWin) sc.onWin(el);
+    setTimeout(resolve, reduceMotion() ? 800 : (sc.winMs || 3000) + 700);
+  });
+}
+const reduceMotion = () => { try{ return matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){ return false; } };
 
 function isOpened(i){
   return !!(state.opened && state.opened[i]) || state.done.includes(i) || !!(state.codes[i] && String(state.codes[i]).trim());
@@ -1664,6 +1870,10 @@ async function doSubmit(){
     if(!state.done.includes(i)) state.done.push(i);
     if(i < MAIN) state.unlocked = Math.max(state.unlocked, Math.min(i+1, MAIN-1));
     save(); renderMap(); cloudSave();
+    tWrite(SC[i].interactive
+      ? `<span class="tip">▶ 그림 속 에너지 셀을 클릭해서 빈 슬롯에 넣어 보세요!</span>\n`
+      : `<span class="dim">그림을 보세요…</span>\n`);
+    await playWin(i);
     await openDoors(i);
   }else{
     cloudSave();
