@@ -45,8 +45,12 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-size:20px;letter-spacing:.5px;color:var(--text);user-select:none;background:none;border:0;padding:0}
 .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--bad);box-shadow:0 0 10px var(--bad);animation:blink 1.4s infinite}
 @keyframes blink{50%{opacity:.25}}
-.map{display:flex;gap:6px;align-items:center;flex:1;min-width:280px}
-.room{flex:1;min-width:34px;height:34px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--muted);font-family:var(--font-code);font-size:13px;display:flex;align-items:center;justify-content:center;gap:4px;position:relative}
+.map{display:flex;flex-wrap:nowrap;gap:6px;align-items:center;flex:1;min-width:280px;overflow-x:auto;overflow-y:hidden;padding-bottom:6px;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.map::-webkit-scrollbar{height:6px}
+.map::-webkit-scrollbar-track{background:transparent}
+.map::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px}
+.map::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.room{flex:none;min-width:34px;padding:0 10px;white-space:nowrap;height:34px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--muted);font-family:var(--font-code);font-size:13px;display:flex;align-items:center;justify-content:center;gap:4px;position:relative}
 .room.locked{opacity:.45;cursor:not-allowed}
 .room.done{border-color:rgba(107,227,154,.5);color:var(--ok)}
 .room.current{border-color:var(--amber);color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
@@ -1149,6 +1153,12 @@ function renderMap(){
     const sep = i === MAIN ? `<span class="map-sep" aria-hidden="true"></span>` : "";
     return `${sep}<button type="button" class="${cls.join(" ")}" data-i="${i}" title="${m.bonus?"보너스 "+(i-MAIN+1):i+1}. ${m.room}" ${!open?'aria-disabled="true"':""}>${mark} <span class="lbl">${m.short}</span></button>`;
   }).join("");
+  const map = $("map"), cur = map.querySelector(".room.current");
+  if(cur){
+    const l = cur.offsetLeft - map.offsetLeft, r = l + cur.offsetWidth;
+    if(l < map.scrollLeft) map.scrollLeft = l - 8;
+    else if(r > map.scrollLeft + map.clientWidth) map.scrollLeft = r - map.clientWidth + 8;
+  }
 }
 $("map").addEventListener("click", e=>{
   const b = e.target.closest(".room"); if(!b) return;
