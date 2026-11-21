@@ -111,6 +111,12 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .sc-cell{cursor:pointer;transition:transform .7s cubic-bezier(.3,.8,.3,1);outline:none}
 .sc-cell:not(.in):hover,.sc-cell:not(.in):focus-visible{filter:drop-shadow(0 0 8px #6be39a)}
 .sc-cell.in{cursor:default}
+.sc-cell,.sc-lever{touch-action:none}
+.sc-cell:not(.in){cursor:grab}
+.sc-cell.dragging{transition:none;cursor:grabbing;filter:drop-shadow(0 0 10px #6be39a)}
+.sc-lever{cursor:grab;outline:none}
+.sc-lever:focus-visible .lv-part{stroke:#fff;stroke-width:2}
+.sc-lever.done{cursor:default}
 .sc-seg{transition:opacity .4s}
 .sc-full{animation:blink .45s 3}
 .mission{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 18px;align-items:start}
@@ -918,7 +924,7 @@ const MISSIONS = [
   {
     room:"비상 전원 장치", short:"전원", icon:"power", topic:"숫자 출력",
     story:"컴퓨터는 켜졌지만 문은 전기가 없어 열리지 않는다. 비상 전원 장치는 숫자만 알아듣는다.",
-    task:"숫자 <code>220</code>을 출력하세요. 따옴표 없이 숫자로 출력해야 해요.",
+    task:"숫자 <code>220</code>을 출력하세요.",
     exIn:null, exOut:"220",
     hint:"숫자는 따옴표 없이 괄호 안에 그대로 써요.<br>예: <code>print(7)</code> → 7<br>따옴표로 감싸면 숫자가 아니라 글자가 돼요.",
     tests:[{in:"",out:"220"}],
@@ -943,7 +949,7 @@ const MISSIONS = [
   },
   {
     room:"해제 코드", short:"해제코드", icon:"keypad", topic:"숫자 사칙연산",
-    story:"실험실 문에 쪽지가 붙어 있다. “해제 코드 = 37 × 24”.",
+    story:"문을 여니 또 하나의 문이 나오고, 문에 쪽지가 붙어있다.",
     task:"<code>37 × 24</code>를 계산한 값을 출력하세요.",
     exIn:null, exOut:"888",
     hint:"파이썬에서 곱하기 기호는 <code>×</code>가 아니라 <code>*</code>예요.<br>예: <code>print(6 * 7)</code> → 42<br>답을 직접 계산하지 말고 계산식을 그대로 써서 파이썬이 계산하게 해요.",
@@ -1324,6 +1330,7 @@ const SC = (()=>{
   }
   const hills = (c1="#0b1626", c2="#0e1d2f") => `<path d="M0 300 Q 120 240 260 290 T 520 280 T 800 270 V450 H0z" fill="${c2}"/><path d="M0 340 Q 200 300 400 335 T 800 320 V450 H0z" fill="${c1}"/>`;
   function trees(xs, base, c="#07101b"){ return xs.map(([x,h])=>`<polygon points="${x},${base-h} ${x-h*0.32},${base} ${x+h*0.32},${base}" fill="${c}"/>` ).join(""); }
+  function svgPt(svg, e){ const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
   function cellShape(label){ return R(-12,-26,24,52,"#6be39a",'rx="5" opacity=".9"') + R(-6,-32,12,6,"#6be39a") + T(0,6,label,{s:11,f:"#06181c",w:1}); }
 
   const S = [];
@@ -1349,22 +1356,75 @@ const SC = (()=>{
       {x:30,y:236,w:300,h:64,text:"실험 기록지에는 '파이썬 보안 시스템 v1'이라고만 적혀 있다."}
     ]
   });
-  /* 2 비상 전원 장치 — 220V 입력, 불이 켜짐 */
+  /* 2 비상 전원 장치 — 220이 자동 입력되고, 학생이 레버를 위로 당김 */
   S.push({
-    winMs: 3000,
-    svg: w => room({lamps:false, wall:"#121e22"}) +
-      (w ? W(lamps(), fadeIn(1.6)) + W(dark(.35), "opacity:0;--o0:1;--t:1.2s;--d:1.5s") : dark(.35)) +
-      `<ellipse cx="470" cy="200" rx="260" ry="200" fill="#ffb340" opacity=".06"/>` +
-      R(330,60,280,240,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="3"') + R(330,60,280,18,"url(#pHz)") +
-      R(360,100,220,70,"#06181c",'rx="4"') +
-      (w ? ["2","2","0"].map((dg,k)=>W(T(425+k*26,145,dg,{s:30,f:OK,w:1}), fadeIn(.3+k*.4))).join("") + W(T(520,145,"V",{s:30,f:OK,w:1}), fadeIn(1.4))
-         : T(470,145,"- - - V",{s:30,f:"#ffb340",w:1,ex:'class="sc-blink"'})) +
-      R(370,195,60,80,"#2c3d43",'rx="4"') +
-      (w ? W(R(392,160,16,50,OK,'rx="4"'), "--from:translateY(25px);--d:1.4s;--t:.5s") + W(T(400,292,"ON",{s:12,f:OK,w:1}), fadeIn(1.5))
-         : R(392,175,16,50,"#ff6363",'rx="4"') + T(400,292,"OFF",{s:12,f:"#8aa1a0"})) +
-      [470,510,550].map((x,k)=>`<circle cx="${x}" cy="230" r="12" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/>` + (w ? W(`<circle cx="${x}" cy="230" r="6" fill="${OK}"/>`, fadeIn(1.6+k*.15)) : "")).join("") +
-      cables(360,300,200,330) + cables(580,300,720,330) + cables(470,60,470,0) +
-      R(100,150,130,80,"#ffb340",'rx="4"') + T(165,182,"⚡ 비상 전원",{s:14,f:"#1b1305",w:1}) + T(165,206,"숫자만 입력",{s:13,f:"#1b1305"}),
+    interactive: true,
+    winTip: "▶ 그림 속 레버를 마우스로 잡고 위로 당겨 보세요!",
+    svg: (w, mode) => {
+      const fin = mode === "static", play = w && !fin;
+      let s = room({lamps:false, wall:"#121e22"});
+      if(fin) s += lamps();
+      else if(play) s += `<g id="lampOn" style="opacity:0;transition:opacity 1.2s">${lamps()}</g><g id="darkOv" style="transition:opacity 1.2s">${dark(.35)}</g>`;
+      else s += dark(.35);
+      s += `<ellipse cx="470" cy="200" rx="260" ry="200" fill="#ffb340" opacity=".06"/>` +
+        R(330,60,280,240,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="3"') + R(330,60,280,18,"url(#pHz)") +
+        R(360,100,220,70,"#06181c",'rx="4"');
+      s += w ? ["2","2","0"].map((dg,k)=>W(T(425+k*26,145,dg,{s:30,f:OK,w:1}), fadeIn(.3+k*.4))).join("") + W(T(520,145,"V",{s:30,f:OK,w:1}), fadeIn(1.4))
+             : T(470,145,"- - - V",{s:30,f:"#ffb340",w:1,ex:'class="sc-blink"'});
+      s += R(370,195,60,80,"#2c3d43",'rx="4"') + R(394,200,12,70,"#0a1012",'rx="4"');
+      if(fin){
+        s += R(392,150,16,50,OK,'rx="4"') + `<circle cx="400" cy="150" r="11" fill="${OK}"/>` + T(400,292,"ON",{s:12,f:OK,w:1});
+      }else if(play){
+        s += `<g id="lever" class="sc-lever" tabindex="0" role="button" aria-label="레버를 위로 올리기">` +
+          R(360,130,80,110,"transparent") +
+          `<g id="leverArm" style="transition:transform .25s">` + R(392,175,16,50,"#ff6363",'rx="4" class="lv-part"') + `<circle cx="400" cy="175" r="11" fill="#ff6363" class="lv-part"/></g></g>` +
+          T(400,292,"OFF",{s:12,f:"#8aa1a0",ex:'id="leverTxt"'}) +
+          W(T(448,222,"⬆",{s:26,f:"#ffb340",w:1,ex:'class="sc-blink" id="leverArrow"'}), fadeIn(1.5)) +
+          `<g id="leverMsg">` + W(R(250,318,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#ffb340" stroke-width="2"') + T(400,344,"⬆ 레버를 잡고 위로 당기세요",{s:15,f:"#ffb340",w:1}), fadeIn(1.5)) + `</g>`;
+      }else{
+        s += R(392,175,16,50,"#ff6363",'rx="4"') + `<circle cx="400" cy="175" r="11" fill="#ff6363"/>` + T(400,292,"OFF",{s:12,f:"#8aa1a0"});
+      }
+      s += [470,510,550].map(x=>`<circle cx="${x}" cy="230" r="12" fill="#2c3d43" stroke="#4a5f66" stroke-width="2"/><circle cx="${x}" cy="230" r="6" fill="${fin?OK:"#2c3d43"}" class="pw-led" style="transition:fill .3s"/>`).join("") +
+        cables(360,300,200,330) + cables(580,300,720,330) + cables(470,60,470,0) +
+        R(100,150,130,80,"#ffb340",'rx="4"') + T(165,182,"⚡ 비상 전원",{s:14,f:"#1b1305",w:1}) + T(165,206,"숫자만 입력",{s:13,f:"#1b1305"});
+      return s;
+    },
+    onWin: (el, done) => {
+      const svg = el.querySelector("svg"), lever = el.querySelector("#lever"), arm = el.querySelector("#leverArm");
+      let ready = false, startY = null, dy = 0, finished = false;
+      setTimeout(()=>{ ready = true; }, 1500);
+      const success = ()=>{
+        if(finished) return; finished = true;
+        arm.style.transition = "transform .25s"; arm.style.transform = "translateY(-25px)";
+        el.querySelectorAll(".lv-part").forEach(p=>p.setAttribute("fill", OK));
+        const t = el.querySelector("#leverTxt"); t.textContent = "ON"; t.setAttribute("fill", OK);
+        const ar = el.querySelector("#leverArrow"); if(ar) ar.remove();
+        lever.classList.add("done"); lever.removeAttribute("tabindex");
+        el.querySelectorAll(".pw-led").forEach((c,k)=>setTimeout(()=>c.setAttribute("fill", OK), 300+k*150));
+        setTimeout(()=>{ el.querySelector("#darkOv").style.opacity = 0; el.querySelector("#lampOn").style.opacity = 1; }, 400);
+        el.querySelector("#leverMsg").innerHTML = R(250,318,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#6be39a" stroke-width="2"') + T(400,344,"⚡ 전원 연결 완료!",{s:16,f:OK,w:1});
+        setTimeout(done, 1900);
+      };
+      lever.addEventListener("pointerdown", e=>{
+        if(!ready || finished) return;
+        e.preventDefault(); startY = svgPt(svg, e).y; dy = 0;
+        arm.style.transition = "none"; try{ lever.setPointerCapture(e.pointerId); }catch(err){}
+      });
+      lever.addEventListener("pointermove", e=>{
+        if(startY === null || finished) return;
+        dy = Math.max(0, Math.min(25, startY - svgPt(svg, e).y));
+        arm.style.transform = `translateY(${-dy}px)`;
+        if(dy >= 22) { startY = null; success(); }
+      });
+      const release = ()=>{
+        if(startY === null || finished) return;
+        startY = null;
+        if(dy >= 16) success(); else { arm.style.transition = "transform .25s"; arm.style.transform = "translateY(0px)"; }
+      };
+      lever.addEventListener("pointerup", release);
+      lever.addEventListener("pointercancel", release);
+      lever.addEventListener("keydown", e=>{ if(ready && (e.key==="Enter"||e.key===" "||e.key==="ArrowUp")){ e.preventDefault(); success(); } });
+    },
     hot:{x:352,y:92,w:236,h:86,label:"전원 장치 화면"},
     clues:[
       {x:100,y:150,w:130,h:80,text:"경고 표지판: 비상 전원 장치는 숫자만 알아듣는다. 따옴표를 붙이면 글자로 인식한다!"},
@@ -1519,52 +1579,91 @@ const SC = (()=>{
       {x:478,y:174,w:34,h:56,text:"호출 버튼. 통제 컴퓨터에 경로를 먼저 등록해야 한다."}
     ]
   });
-  /* 11 에너지 셀 충전 — 학생이 직접 셀을 슬롯에 넣음 */
+  /* 11 에너지 셀 충전 — 학생이 셀을 끌어서 빈 슬롯에 넣음 */
   const CELL_FLOOR = [[110,372,-12],[165,380,6],[220,370,-4],[275,378,10]];
-  const CELL_SLOT = k => [337+k*44, 172, 0];
+  const CELL_SLOT = k => [337+k*44, 172];
   S.push({
     interactive: true,
+    winTip: "▶ 그림 속 에너지 셀을 마우스로 끌어서 빈 슬롯에 넣어 보세요!",
     svg: (w, mode) => {
       const filled = mode === "static";
       let s = room({wall:"#1a2428", lamps:false}) + dark(.2) +
         R(0,0,800,330,"#2a383d",'opacity=".35"') + L(60,230,740,230,"#4a5f66",6) + R(380,0,40,30,"#ffb340",'class="sc-blink" opacity=".7"') +
         R(300,90,200,150,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + T(400,116,"ENERGY CELL",{s:13,f:"#6be39a",w:1}) +
-        [0,1,2,3].map(k=>R(320+k*44,130,34,84,"#0a1012",'rx="4" stroke="#3a4d53" stroke-width="2"')).join("") +
+        [0,1,2,3].map(k=>R(320+k*44,130,34,84,"#0a1012",`rx="4" stroke="#3a4d53" stroke-width="2" class="sc-slot" data-k="${k}"`)).join("") +
         R(318,222,164,10,"#0a1012",'rx="3"') + [0,1,2,3].map(k=>R(320+k*41,223,38,8,OK,`rx="2" class="sc-seg" data-k="${k}" style="opacity:${filled?1:0}"`)).join("");
       if(w){
         s += CELL_FLOOR.map(([x,y,r],k)=>{
           const [sx,sy] = CELL_SLOT(k);
           const tr = filled ? `translate(${sx}px,${sy}px)` : `translate(${x}px,${y}px) rotate(${r}deg)`;
-          return `<g class="sc-cell ${filled?"in":""}" data-k="${k}" style="transform:${tr}" ${filled?"":'tabindex="0" role="button" aria-label="에너지 셀 넣기"'}>${cellShape("25")}</g>`;
+          return `<g class="sc-cell ${filled?"in":""}" data-k="${k}" style="transform:${tr}" ${filled?"":'tabindex="0" role="button" aria-label="에너지 셀을 빈 슬롯에 넣기"'}>${cellShape("25")}</g>`;
         }).join("");
         s += `<g id="cellMsg">` + (filled ? R(250,268,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#6be39a" stroke-width="2"') + T(400,294,"⚡ 에너지 100% 충전 완료!",{s:16,f:OK,w:1})
-             : R(220,268,360,40,"rgba(6,24,28,.92)",'rx="20" stroke="#ffb340" stroke-width="2"') + T(400,294,"에너지 셀을 클릭해서 슬롯에 넣으세요 (0/4)",{s:14,f:"#ffb340",w:1,ex:'class="sc-blink"'})) + `</g>`;
+             : R(200,268,400,40,"rgba(6,24,28,.92)",'rx="20" stroke="#ffb340" stroke-width="2"') + T(400,294,"에너지 셀을 끌어서 빈 슬롯에 넣으세요 (0/4)",{s:14,f:"#ffb340",w:1})) + `</g>`;
       }else{
         s += CELL_FLOOR.map(([x,y,r])=>`<g transform="translate(${x} ${y}) rotate(${r})">${cellShape("25")}</g>`).join("");
       }
       return s;
     },
     onWin: (el, done) => {
+      const svg = el.querySelector("svg"), msg = el.querySelector("#cellMsg");
+      const slotFull = [false,false,false,false];
       let n = 0;
-      const msg = el.querySelector("#cellMsg");
+      const msgText = t => { msg.querySelector("text").textContent = t; };
+      const slots = [...el.querySelectorAll(".sc-slot")];
+      const nearSlot = (x,y) => {
+        let best = -1, bd = 1e9;
+        slotFull.forEach((f,k)=>{ if(f) return; const [sx,sy] = CELL_SLOT(k); const d = Math.hypot(sx-x, sy-y); if(d < bd){ bd = d; best = k; } });
+        return bd < 70 ? best : -1;
+      };
+      const mark = k => slots.forEach((s,j)=> s.setAttribute("stroke", j===k ? OK : "#3a4d53"));
+      const place = (c, k) => {
+        const [sx,sy] = CELL_SLOT(k);
+        slotFull[k] = true; c.classList.add("in"); c.classList.remove("dragging"); c.removeAttribute("tabindex");
+        c.style.transform = `translate(${sx}px,${sy}px)`;
+        const seg = el.querySelector(`.sc-seg[data-k="${n}"]`); if(seg) seg.style.opacity = 1;
+        n++; mark(-1);
+        if(n < 4) msgText(`에너지 셀을 끌어서 빈 슬롯에 넣으세요 (${n}/4)`);
+        else{
+          msg.innerHTML = R(250,268,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#6be39a" stroke-width="2"') + T(400,294,"⚡ 에너지 100% 충전 완료!",{s:16,f:OK,w:1});
+          el.querySelectorAll(".sc-seg").forEach(sg=>sg.classList.add("sc-full"));
+          setTimeout(done, 1700);
+        }
+      };
       el.querySelectorAll(".sc-cell").forEach(c=>{
-        const put = ()=>{
+        const k0 = +c.dataset.k, [fx,fy,fr] = CELL_FLOOR[k0];
+        let drag = null;
+        c.addEventListener("pointerdown", e=>{
           if(c.classList.contains("in")) return;
-          const k = +c.dataset.k, [sx,sy] = CELL_SLOT(n);
-          c.classList.add("in"); c.removeAttribute("tabindex");
-          c.style.transform = `translate(${sx}px,${sy}px)`;
-          const seg = el.querySelector(`.sc-seg[data-k="${n}"]`); if(seg) seg.style.opacity = 1;
-          n++;
-          if(n < 4){
-            msg.querySelector("text").textContent = `에너지 셀을 클릭해서 슬롯에 넣으세요 (${n}/4)`;
-          }else{
-            msg.innerHTML = `<rect x="250" y="268" width="300" height="40" rx="20" fill="rgba(6,24,28,.92)" stroke="#6be39a" stroke-width="2"/><text x="400" y="294" ${F} font-size="16" fill="${OK}" text-anchor="middle" font-weight="700">⚡ 에너지 100% 충전 완료!</text>`;
-            el.querySelectorAll(".sc-seg").forEach(sg=>sg.classList.add("sc-full"));
-            setTimeout(done, 1700);
-          }
+          e.preventDefault();
+          const p = svgPt(svg, e);
+          const cur = drag && drag.pos ? drag.pos : [fx,fy];
+          drag = {ox: p.x - cur[0], oy: p.y - cur[1], pos: cur, moved: 0};
+          c.classList.add("dragging"); c.parentNode.appendChild(c);
+          try{ c.setPointerCapture(e.pointerId); }catch(err){}
+        });
+        c.addEventListener("pointermove", e=>{
+          if(!drag) return;
+          const p = svgPt(svg, e), x = p.x - drag.ox, y = p.y - drag.oy;
+          drag.moved = Math.max(drag.moved, Math.hypot(x - fx, y - fy));
+          drag.pos = [x,y];
+          c.style.transform = `translate(${x}px,${y}px)`;
+          mark(nearSlot(x,y));
+        });
+        const drop = ()=>{
+          if(!drag) return;
+          const [x,y] = drag.pos, moved = drag.moved; drag = null;
+          const k = nearSlot(x,y);
+          if(k >= 0){ place(c, k); return; }
+          c.classList.remove("dragging"); mark(-1);
+          c.style.transform = `translate(${fx}px,${fy}px) rotate(${fr}deg)`;
+          if(moved < 6) msgText("셀을 누른 채로 빈 슬롯까지 끌어 보세요!");
         };
-        c.addEventListener("click", put);
-        c.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); put(); } });
+        c.addEventListener("pointerup", drop);
+        c.addEventListener("pointercancel", drop);
+        c.addEventListener("keydown", e=>{
+          if((e.key==="Enter"||e.key===" ") && !c.classList.contains("in")){ e.preventDefault(); const k = slotFull.indexOf(false); if(k >= 0) place(c, k); }
+        });
       });
     },
     hot:{x:294,y:84,w:212,h:162,label:"셀 충전 슬롯"},
@@ -1870,8 +1969,8 @@ async function doSubmit(){
     if(!state.done.includes(i)) state.done.push(i);
     if(i < MAIN) state.unlocked = Math.max(state.unlocked, Math.min(i+1, MAIN-1));
     save(); renderMap(); cloudSave();
-    tWrite(SC[i].interactive
-      ? `<span class="tip">▶ 그림 속 에너지 셀을 클릭해서 빈 슬롯에 넣어 보세요!</span>\n`
+    tWrite(SC[i].winTip
+      ? `<span class="tip">${esc(SC[i].winTip)}</span>\n`
       : `<span class="dim">그림을 보세요…</span>\n`);
     await playWin(i);
     await openDoors(i);
