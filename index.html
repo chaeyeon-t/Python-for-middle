@@ -263,6 +263,9 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .btn-sm{padding:7px 12px;font-size:14px;font-weight:500}
 .doors-state{font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .doors-state.open{color:var(--ok);border-color:rgba(107,227,154,.5)}
+.row-btns{display:flex;gap:6px}
+.btn-del{background:var(--bad);color:#1b0505;border-color:var(--bad)}
+.btn-del:hover{filter:brightness(1.1)}
 .btn-danger{background:transparent;color:var(--bad);border-color:rgba(255,99,99,.55)}
 .btn-danger:hover{background:rgba(255,99,99,.12)}
 .btn-xs{padding:4px 10px;font-size:13px;font-weight:500}
@@ -2132,8 +2135,23 @@ function watchMine(){
   if(mineUnsub){ mineUnsub(); mineUnsub = null; }
   if(!window.LabDB || !window.LabDB.watchMine || !state.student) return;
   const st = state.student;
+  let seen = false;
   mineUnsub = window.LabDB.watchMine(st, rec=>{
     const cur = state.student;
+    if(rec){ seen = true; }
+    else if(seen && cur && cur.cls===st.cls && cur.num===st.num && cur.name===st.name){
+      // 선생님이 내 기록을 삭제함 → 이 컴퓨터 기록도 지우고 시작 화면으로
+      if(mineUnsub){ mineUnsub(); mineUnsub = null; }
+      state = {cur:0, unlocked:0, done:[], tries:Array(ALL.length).fill(0), codes:{}, started:false, student:null};
+      save();
+      ["ending","exitDlg"].forEach(id=>{ $(id).hidden = true; });
+      $("inCls").value = ""; $("inNum").value = ""; $("inName").value = "";
+      $("startBtn").textContent = "탈출 시작"; $("resetBtn").hidden = true;
+      $("saveNote").textContent = "";
+      $("intro").hidden = false; updateStudentTag(); goto(0);
+      alert("선생님이 기록을 삭제했어요. 반·번호·이름을 입력해서 처음부터 시작하세요.");
+      return;
+    }
     if(!rec || !rec.resetId || rec.resetId === state.resetId) return;
     if(!cur || cur.cls!==st.cls || cur.num!==st.num || cur.name!==st.name) return;
     state = {cur:0, unlocked:0, done:[], tries:Array(ALL.length).fill(0), codes:{}, started:true, student:cur, resetId:rec.resetId};
@@ -2367,7 +2385,7 @@ function renderTeacher(){
     return `<tr><td class="num">${r.cls}</td><td class="num">${r.num}</td><td>${esc(r.name)}</td>
       <td><div class="dots">${dots}</div></td><td class="num">${r.cleared.length}</td><td class="num">${r.bonus ? "★"+r.bonus : "-"}</td><td class="num">${r.total}</td>
       <td class="num">${MISSIONS.map((m,i)=>r.tries[i]||0).join(" · ")}</td><td>${st}</td><td class="num">${fmtTime(r.ts)}</td>
-      <td><button class="btn btn-danger btn-xs" type="button" data-reset="${esc(r.id)}">초기화</button></td></tr>`;
+      <td><div class="row-btns"><button class="btn btn-danger btn-xs" type="button" data-reset="${esc(r.id)}">초기화</button><button class="btn btn-del btn-xs" type="button" data-del="${esc(r.id)}">삭제</button></div></td></tr>`;
   }).join("");
 }
 /* ---------- 기록 초기화 ---------- */
@@ -2396,7 +2414,22 @@ $("tReset").addEventListener("click", ()=>{
   if(typed.trim() !== "초기화"){ alert("'초기화'라고 정확히 입력해야 초기화돼요."); return; }
   tDoReset(list, $("tReset"));
 });
-$("tRows").addEventListener("click", e=>{
+$("tRows").addEventListener("click", async e=>{
+  const d = e.target.closest("[data-del]");
+  if(d && window.LabDB && window.LabDB.remove){
+    const r = tShown.find(x=>x.id === d.dataset.del); if(!r) return;
+    if(!confirm(`${r.cls}반 ${r.num}번 ${r.name} 학생을 데이터베이스에서 완전히 삭제할까요?\n표에서도 사라지고, 되돌릴 수 없어요.`)) return;
+    d.disabled = true; d.textContent = "삭제 중…";
+    try{ await window.LabDB.remove(r.id); }
+    catch(err){
+      console.warn("[PY-LAB] 학생 삭제 실패:", err);
+      alert(err && err.code === "permission-denied"
+        ? "삭제할 권한이 없어요. Firestore 보안 규칙에서 students 컬렉션에 delete를 허용해 주세요."
+        : "삭제하지 못했어요: " + (err && err.message || err));
+      d.disabled = false; d.textContent = "삭제";
+    }
+    return;
+  }
   const b = e.target.closest("[data-reset]"); if(!b || !window.LabDB) return;
   const r = tShown.find(x=>x.id === b.dataset.reset); if(!r) return;
   if(!confirm(`${r.cls}반 ${r.num}번 ${r.name} 학생의 기록을 모두 지울까요?\n되돌릴 수 없어요.`)) return;
@@ -2444,7 +2477,7 @@ if(!firebaseConfig.projectId){
 }else{
   try{
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
-    const { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, onSnapshot, writeBatch } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
+    const { getFirestore, doc, setDoc, getDoc, deleteDoc, serverTimestamp, collection, onSnapshot, writeBatch } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const db = getFirestore(initializeApp(firebaseConfig));
     const docId = st => `${st.cls}반-${String(st.num).padStart(2,"0")}번-${st.name}`;
     window.LabDB = {
@@ -2489,6 +2522,10 @@ if(!firebaseConfig.projectId){
       },
       async setDoors(open){
         await setDoc(doc(db, "settings", "doors"), { allOpen: !!open, updatedAt: serverTimestamp() }, { merge: true });
+      },
+      // 교사용 화면: 학생 한 명을 데이터베이스에서 완전히 삭제
+      async remove(id){
+        await deleteDoc(doc(db, COLLECTION, id));
       },
       // 교사용 화면: 학생 기록 실시간 구독
       watchAll(onData, onError){
