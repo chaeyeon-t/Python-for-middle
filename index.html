@@ -261,6 +261,8 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .tctl select,.tctl input{background:#0a1012;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:14px;padding:7px 10px;font-family:var(--font-body)}
 .tctl .count{color:var(--muted);font-size:13px;margin-left:auto}
 .btn-sm{padding:7px 12px;font-size:14px;font-weight:500}
+.doors-state{font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.doors-state.open{color:var(--ok);border-color:rgba(107,227,154,.5)}
 .btn-danger{background:transparent;color:var(--bad);border-color:rgba(255,99,99,.55)}
 .btn-danger:hover{background:rgba(255,99,99,.12)}
 .btn-xs{padding:4px 10px;font-size:13px;font-weight:500}
@@ -444,6 +446,9 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
       <h2>학생 기록</h2>
       <span class="db-note" id="tDbNote"></span>
       <span class="grow"></span>
+      <span class="doors-state" id="tDoorsState">🔒 진행 순서대로</span>
+      <button class="btn btn-run btn-sm" id="tDoorsOpen" type="button">전체 문 열기</button>
+      <button class="btn btn-run btn-sm" id="tDoorsClose" type="button">전체 문 닫기</button>
       <button class="btn btn-run btn-sm" id="tCsv" type="button">CSV 내려받기</button>
       <button class="btn btn-run btn-sm" id="tUnlock" type="button">이 컴퓨터의 모든 방 열기</button>
       <button class="btn btn-danger btn-sm" id="tReset" type="button">기록 초기화</button>
@@ -1845,7 +1850,9 @@ function openTerminal(i){
 const mainCount = () => state.done.filter(i=>i<MAIN).length;
 const mainDone = () => mainCount() === MAIN;
 const bonusOpen = () => mainDone() || !!state.bonusOpen;
+let doorsOpen = false;   // 교사가 '전체 문 열기'를 누르면 true (모든 학생 화면에 실시간 반영)
 function canEnter(i){
+  if(doorsOpen) return true;
   if(i < MAIN) return i <= state.unlocked;
   return bonusOpen() && (i === MAIN || state.done.includes(i-1) || !!state.bonusOpen);
 }
@@ -2201,7 +2208,60 @@ let dbStatus = {t:"기록 서버 확인 중…", ok:false};
 window.addEventListener("labdb-status", e=>{
   dbStatus = e.detail; setDbNote(e.detail.t, e.detail.ok);
   if(!$("teacher").hidden) tSubscribe();
+  watchDoors();
 });
+
+/* ---------- 전체 문 열기/닫기 (교사 → 모든 학생) ---------- */
+let doorsUnsub = null;
+function watchDoors(){
+  if(doorsUnsub || !window.LabDB || !window.LabDB.watchDoors) return;
+  doorsUnsub = window.LabDB.watchDoors(d=>{
+    const prev = doorsOpen;
+    doorsOpen = !!(d && d.allOpen);
+    renderMap(); renderDoorsState();
+    if(prev === doorsOpen || !$("intro").hidden) return;
+    dropCursor();
+    if(doorsOpen){
+      tWrite(`<span class="tip">📢 선생님이 모든 문을 열었어요. 위쪽 지도에서 원하는 방으로 갈 수 있어요.</span>\n`);
+    }else{
+      tWrite(`<span class="tip">📢 선생님이 문을 다시 닫았어요. 내가 푼 순서대로만 갈 수 있어요.</span>\n`);
+      if(!canEnter(state.cur)){
+        let k = state.cur; while(k > 0 && !canEnter(k)) k--;
+        goto(k); dropCursor();
+        tWrite(`<span class="tip">📢 선생님이 문을 다시 닫아서, 내가 풀 차례인 방으로 돌아왔어요.</span>\n`);
+      }
+    }
+    tPrompt(); tWrite(`<span class="cursor"></span>`);
+  });
+}
+function renderDoorsState(){
+  const el = $("tDoorsState"); if(!el) return;
+  el.textContent = doorsOpen ? "🔓 모든 학생 문 열림" : "🔒 진행 순서대로";
+  el.className = "doors-state" + (doorsOpen ? " open" : "");
+  const can = !!(window.LabDB && window.LabDB.setDoors);
+  $("tDoorsOpen").disabled = !can || doorsOpen;
+  $("tDoorsClose").disabled = !can || !doorsOpen;
+  $("tDoorsOpen").title = $("tDoorsClose").title = can ? "" : "Firebase가 연결되어야 쓸 수 있어요";
+}
+async function setDoors(open, btn){
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = "적용 중…";
+  try{
+    await window.LabDB.setDoors(open);
+    btn.textContent = label;
+  }catch(err){
+    console.warn("[PY-LAB] 전체 문 설정 실패:", err);
+    btn.textContent = label;
+    const n = $("tDbNote");
+    n.textContent = (err && err.code === "permission-denied")
+      ? "○ 문 설정을 저장할 권한이 없어요. Firestore 규칙에 settings 컬렉션을 추가해 주세요."
+      : "○ 문 설정을 저장하지 못했어요.";
+    n.className = "db-note";
+  }
+  renderDoorsState();
+}
+$("tDoorsOpen").addEventListener("click", e=> setDoors(true, e.currentTarget));
+$("tDoorsClose").addEventListener("click", e=> setDoors(false, e.currentTarget));
 
 /* ---------- 교사용 화면 ---------- */
 const PW_HASH = "e3789e495dbbd73412c0f9befd308d10c1723dae744dcb761c052a18d0a4e2b3"; // 비밀번호의 SHA-256
@@ -2225,7 +2285,7 @@ $("tLoginForm").addEventListener("submit", async e=>{
   try{ sessionStorage.setItem("pylab-teacher","1"); }catch(err){}
   $("tLogin").hidden = true; openTeacher();
 });
-function openTeacher(){ $("teacher").hidden = false; tSubscribe(); renderTeacher(); }
+function openTeacher(){ $("teacher").hidden = false; tSubscribe(); renderTeacher(); renderDoorsState(); }
 $("tClose").addEventListener("click", ()=>{ $("teacher").hidden = true; });
 $("tUnlock").addEventListener("click", ()=>{
   state.unlocked = MAIN-1; state.bonusOpen = true; save(); renderMap();
@@ -2429,6 +2489,15 @@ if(!firebaseConfig.projectId){
           });
           await batch.commit();
         }
+      },
+      // 전체 문 열기/닫기 상태 (settings/doors 문서 하나)
+      watchDoors(onData){
+        return onSnapshot(doc(db, "settings", "doors"),
+          snap => onData(snap.exists() ? snap.data() : {}),
+          err => console.warn("[PY-LAB] 문 설정 확인 실패:", err));
+      },
+      async setDoors(open){
+        await setDoc(doc(db, "settings", "doors"), { allOpen: !!open, updatedAt: serverTimestamp() }, { merge: true });
       },
       // 교사용 화면: 학생 기록 실시간 구독
       watchAll(onData, onError){
