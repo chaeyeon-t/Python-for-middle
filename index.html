@@ -140,6 +140,8 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .hint-btn:hover{color:var(--amber);border-color:var(--amber)}
 .hint-box{background:rgba(255,179,64,.08);border:1px solid rgba(255,179,64,.35);border-radius:4px;padding:10px 12px;font-size:14px}
 .hint-box[hidden]{display:none}
+.brief-body.hint-open{overflow-y:auto}
+.brief-body.hint-open .scene{flex:none}
 
 /* workbench */
 .bench{position:relative;display:grid;grid-template-rows:minmax(190px,1.2fr) auto minmax(150px,1fr);gap:12px;min-height:0}
@@ -1883,7 +1885,7 @@ function goto(i){
   $("io").innerHTML = (m.exIn !== null
       ? `<div class="io-box"><div class="t">예제 입력</div><pre>${esc(m.exIn)}</pre></div><div class="io-box"><div class="t">예제 출력</div><pre>${esc(m.exOut)}</pre></div>`
       : `<div class="io-box full"><div class="t">출력 예시 (입력 없음)</div><pre>${esc(m.exOut)}</pre></div>`);
-  $("hintBox").innerHTML = m.hint; $("hintBox").hidden = true; $("hintBtn").textContent = "힌트 보기";
+  $("hintBox").innerHTML = m.hint; setHint(false);
   $("fileName").textContent = `mission${i+1}.py`;
   codeEl.value = state.codes[i] ?? "";
   if(codeEl.value.trim() === DEFAULT_TEXT) codeEl.value = "";
@@ -1897,10 +1899,21 @@ function goto(i){
   renderMap();
 }
 
-$("hintBtn").addEventListener("click", ()=>{
-  const hb = $("hintBox"); hb.hidden = !hb.hidden;
-  $("hintBtn").textContent = hb.hidden ? "힌트 보기" : "힌트 숨기기";
-});
+// 힌트를 열면 그림 크기는 그대로 두고, 미션 창에 스크롤이 생기게 함
+function setHint(open){
+  const hb = $("hintBox"), sc = $("scene"), body = document.querySelector(".brief-body");
+  if(open){
+    sc.style.height = sc.getBoundingClientRect().height + "px";
+    body.classList.add("hint-open");
+  }else{
+    sc.style.height = "";
+    body.classList.remove("hint-open");
+  }
+  hb.hidden = !open;
+  $("hintBtn").textContent = open ? "힌트 숨기기" : "힌트 보기";
+  if(open) hb.scrollIntoView({block:"nearest", behavior:"smooth"});
+}
+$("hintBtn").addEventListener("click", ()=> setHint($("hintBox").hidden));
 $("clearBtn").addEventListener("click", ()=>{ term.innerHTML=""; tPrompt(); tWrite(`<span class="cursor"></span>`); });
 
 function dropCursor(){ term.querySelectorAll(".cursor").forEach(c=>c.remove()); }
