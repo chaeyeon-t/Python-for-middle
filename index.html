@@ -199,6 +199,9 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .tctl select,.tctl input{background:#0a1012;border:1px solid var(--line);border-radius:4px;color:var(--text);font-size:14px;padding:7px 10px;font-family:var(--font-body)}
 .tctl .count{color:var(--muted);font-size:13px;margin-left:auto}
 .btn-sm{padding:7px 12px;font-size:14px;font-weight:500}
+.btn-danger{background:transparent;color:var(--bad);border-color:rgba(255,99,99,.55)}
+.btn-danger:hover{background:rgba(255,99,99,.12)}
+.btn-xs{padding:4px 10px;font-size:13px;font-weight:500}
 .ttable-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
 table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
 .tt th{text-align:left;font-weight:500;color:var(--muted);font-size:13px;background:var(--panel-2);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -369,6 +372,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
       <span class="grow"></span>
       <button class="btn btn-run btn-sm" id="tCsv" type="button">CSV 내려받기</button>
       <button class="btn btn-run btn-sm" id="tUnlock" type="button">이 컴퓨터의 모든 방 열기</button>
+      <button class="btn btn-danger btn-sm" id="tReset" type="button">기록 초기화</button>
       <button class="btn btn-submit btn-sm" id="tClose" type="button">닫기</button>
     </div>
     <div class="tbody">
@@ -391,7 +395,7 @@ table.tt{width:100%;border-collapse:collapse;font-size:14px;min-width:820px}
       </div>
       <div class="ttable-wrap">
         <table class="tt">
-          <thead><tr><th>반</th><th>번호</th><th>이름</th><th>진행 (1~12번 방)</th><th>해제</th><th>보너스</th><th>총 시도</th><th>방별 시도</th><th>상태</th><th>마지막 기록</th></tr></thead>
+          <thead><tr><th>반</th><th>번호</th><th>이름</th><th>진행 (1~12번 방)</th><th>해제</th><th>보너스</th><th>총 시도</th><th>방별 시도</th><th>상태</th><th>마지막 기록</th><th>관리</th></tr></thead>
           <tbody id="tRows"></tbody>
         </table>
       </div>
@@ -1353,6 +1357,10 @@ function updateStudentTag(){
 // 서버에 저장된 기록과 이 컴퓨터의 기록을 합침 (더 많이 푼 쪽을 살림)
 function mergeCloud(rec){
   if(!rec || rec.version !== 2) return;  // 예전 7개 방 기록은 불러오지 않음
+  if(rec.resetId && rec.resetId !== state.resetId){
+    // 선생님이 기록을 초기화함: 이 컴퓨터의 기록도 비움
+    state = {cur:0, unlocked:0, done:[], tries:Array(ALL.length).fill(0), codes:{}, started:true, student:state.student, resetId:rec.resetId};
+  }
   const cleared = (Array.isArray(rec.clearedRooms) ? rec.clearedRooms : []).map(n=>n-1).filter(i=>i>=0 && i<ALL.length);
   state.done = [...new Set([...state.done, ...cleared])];
   if(Array.isArray(rec.tries)) state.tries = ALL.map((m,i)=>Math.max(state.tries[i]||0, +rec.tries[i]||0));
@@ -1392,12 +1400,28 @@ async function startGame(){
   $("intro").hidden = true;
   updateStudentTag(); cloudSave(true);
   goto(state.cur); codeEl.focus();
+  watchMine();
+}
+let mineUnsub = null;
+function watchMine(){
+  if(mineUnsub){ mineUnsub(); mineUnsub = null; }
+  if(!window.LabDB || !window.LabDB.watchMine || !state.student) return;
+  const st = state.student;
+  mineUnsub = window.LabDB.watchMine(st, rec=>{
+    const cur = state.student;
+    if(!rec || !rec.resetId || rec.resetId === state.resetId) return;
+    if(!cur || cur.cls!==st.cls || cur.num!==st.num || cur.name!==st.name) return;
+    state = {cur:0, unlocked:0, done:[], tries:Array(ALL.length).fill(0), codes:{}, started:true, student:cur, resetId:rec.resetId};
+    save(); cloudSave(); $("ending").hidden = true; goto(0);
+    alert("선생님이 기록을 초기화했어요. 1번 방부터 다시 시작해요.");
+  });
 }
 
 /* ---------- 나가기 ---------- */
 $("exitBtn").addEventListener("click", ()=>{ $("exitDlg").hidden = false; $("exitOk").focus(); });
 $("exitCancel").addEventListener("click", ()=>{ $("exitDlg").hidden = true; codeEl.focus(); });
 $("exitOk").addEventListener("click", async ()=>{
+  if(mineUnsub){ mineUnsub(); mineUnsub = null; }
   const btn = $("exitOk");
   btn.disabled = true; btn.textContent = "저장하는 중…";
   state.codes[state.cur] = codeEl.value; save();
@@ -1513,7 +1537,7 @@ function normRec(r){
   const cleared = clearedAll.filter(n=>n<=MAIN);
   const bonus = clearedAll.filter(n=>n>MAIN).length;
   const ts = r.updatedAt && typeof r.updatedAt.toMillis === "function" ? r.updatedAt.toMillis() : (r.updatedAt||0);
-  return {cls:+r.class||0, num:+r.number||0, name:r.name||"", cleared, bonus, tries,
+  return {id:r.id, cls:+r.class||0, num:+r.number||0, name:r.name||"", cleared, bonus, tries,
     total: tries.slice(0,MAIN).reduce((a,b)=>a+b,0), cur:+r.currentRoom||1, finished:!!r.finished, ts};
 }
 function renderTeacher(){
@@ -1550,12 +1574,15 @@ function renderTeacher(){
     <div class="track"><div class="fill" style="width:${n?roomCleared[i]/n*100:0}%"></div></div>
     <span class="c">${roomCleared[i]} / ${n}</span></div>`).join("");
   $("tCount").textContent = `${n}명 표시 중`;
+  tShown = rows;
+  $("tReset").textContent = `${cls ? cls+"반" : (q ? "검색된 학생" : "전체")} 기록 초기화 (${n}명)`;
+  $("tReset").disabled = !window.LabDB || !!tReadErr || !n;
   // 표
   if(!window.LabDB || tReadErr){
     const msg = tReadErr || "Firebase가 연결되지 않아 학생 기록을 불러올 수 없어요. index.html의 firebaseConfig를 채우고 학교 사이트 주소에서 열어 주세요.";
-    $("tRows").innerHTML = `<tr><td colspan="10" class="tempty">${esc(msg)}</td></tr>`; return;
+    $("tRows").innerHTML = `<tr><td colspan="11" class="tempty">${esc(msg)}</td></tr>`; return;
   }
-  if(!rows.length){ $("tRows").innerHTML = `<tr><td colspan="10" class="tempty">${all.length?"조건에 맞는 학생이 없어요.":"아직 기록된 학생이 없어요. 학생이 시작 화면에서 정보를 입력하면 바로 나타나요."}</td></tr>`; return; }
+  if(!rows.length){ $("tRows").innerHTML = `<tr><td colspan="11" class="tempty">${all.length?"조건에 맞는 학생이 없어요.":"아직 기록된 학생이 없어요. 학생이 시작 화면에서 정보를 입력하면 바로 나타나요."}</td></tr>`; return; }
   $("tRows").innerHTML = rows.map(r=>{
     const dots = MISSIONS.map((m,i)=>{
       const c = r.cleared.includes(i+1) ? "ok" : (!r.finished && r.cur===i+1 ? "cur" : "");
@@ -1568,9 +1595,42 @@ function renderTeacher(){
              : `<span class="pill">${r.cur}번 방 진행 중</span>`;
     return `<tr><td class="num">${r.cls}</td><td class="num">${r.num}</td><td>${esc(r.name)}</td>
       <td><div class="dots">${dots}</div></td><td class="num">${r.cleared.length}</td><td class="num">${r.bonus ? "★"+r.bonus : "-"}</td><td class="num">${r.total}</td>
-      <td class="num">${MISSIONS.map((m,i)=>r.tries[i]||0).join(" · ")}</td><td>${st}</td><td class="num">${fmtTime(r.ts)}</td></tr>`;
+      <td class="num">${MISSIONS.map((m,i)=>r.tries[i]||0).join(" · ")}</td><td>${st}</td><td class="num">${fmtTime(r.ts)}</td>
+      <td><button class="btn btn-danger btn-xs" type="button" data-reset="${esc(r.id)}">초기화</button></td></tr>`;
   }).join("");
 }
+/* ---------- 기록 초기화 ---------- */
+let tShown = [];
+async function tDoReset(list, btn){
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = "초기화하는 중…";
+  try{
+    await window.LabDB.reset(list);
+    btn.textContent = "초기화 완료";
+  }catch(e){
+    console.warn("[PY-LAB] 기록 초기화 실패:", e);
+    alert(e && e.code === "permission-denied"
+      ? "기록을 고칠 권한이 없어요. Firestore 보안 규칙에서 students 컬렉션의 write를 허용해 주세요."
+      : "기록을 초기화하지 못했어요: " + (e && e.message || e));
+    btn.textContent = label;
+  }
+  setTimeout(()=>{ btn.disabled = false; renderTeacher(); }, 1200);
+}
+$("tReset").addEventListener("click", ()=>{
+  const list = tShown.slice();
+  if(!list.length || !window.LabDB) return;
+  const who = $("tCls").value ? `${$("tCls").value}반` : ($("tSearch").value.trim() ? "검색된" : "전체");
+  const typed = prompt(`${who} 학생 ${list.length}명의 기록(해제한 방, 시도 횟수, 작성한 코드)을 모두 지워요.\n되돌릴 수 없어요. 계속하려면 '초기화'라고 입력하세요. 먼저 CSV로 내려받아 두는 걸 권해요.`);
+  if(typed === null) return;
+  if(typed.trim() !== "초기화"){ alert("'초기화'라고 정확히 입력해야 초기화돼요."); return; }
+  tDoReset(list, $("tReset"));
+});
+$("tRows").addEventListener("click", e=>{
+  const b = e.target.closest("[data-reset]"); if(!b || !window.LabDB) return;
+  const r = tShown.find(x=>x.id === b.dataset.reset); if(!r) return;
+  if(!confirm(`${r.cls}반 ${r.num}번 ${r.name} 학생의 기록을 모두 지울까요?\n되돌릴 수 없어요.`)) return;
+  tDoReset([r], b);
+});
 $("tCsv").addEventListener("click", ()=>{
   const rows = tRecords.filter(r=>r.version===2).map(normRec).sort((a,b)=>(a.cls-b.cls)||(a.num-b.num));
   const head = ["반","번호","이름","해제한 방 수","해제한 방","보너스 해제 수","총 시도",...MISSIONS.map((m,i)=>`${i+1}번 방 시도`),...BONUS.map((m,k)=>`보너스 ${k+1} 시도`),"현재 방","탈출 완료","마지막 기록"];
@@ -1613,7 +1673,7 @@ if(!firebaseConfig.projectId){
 }else{
   try{
     const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-app.js`);
-    const { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, onSnapshot } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
+    const { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, onSnapshot, writeBatch } = await import(`https://www.gstatic.com/firebasejs/${SDK}/firebase-firestore.js`);
     const db = getFirestore(initializeApp(firebaseConfig));
     const docId = st => `${st.cls}반-${String(st.num).padStart(2,"0")}번-${st.name}`;
     window.LabDB = {
@@ -1627,6 +1687,28 @@ if(!firebaseConfig.projectId){
         const extra = isLogin ? { lastLoginAt: serverTimestamp() } : {};
         await setDoc(doc(db, COLLECTION, id), { ...data, ...extra, updatedAt: serverTimestamp() }, { merge: true });
         status("기록 서버에 저장됨", true);
+      },
+      // 학생 화면: 내 기록 실시간 확인 (교사가 초기화하면 바로 알 수 있게)
+      watchMine(st, onData){
+        return onSnapshot(doc(db, COLLECTION, docId(st)),
+          snap => onData(snap.exists() ? snap.data() : null),
+          err => console.warn("[PY-LAB] 내 기록 확인 실패:", err));
+      },
+      // 교사용 화면: 학생 기록 초기화 (빈 기록으로 덮어쓰고 초기화 표시를 남김)
+      async reset(list){
+        const rid = Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+        for(let k=0; k<list.length; k+=400){
+          const batch = writeBatch(db);
+          list.slice(k, k+400).forEach(r=>{
+            batch.set(doc(db, COLLECTION, r.id), {
+              class: r.cls, number: r.num, name: r.name, version: 2,
+              clearedCount: 0, bonusCleared: 0, clearedRooms: [], tries: [],
+              currentRoom: 1, finished: false, codes: {},
+              resetId: rid, resetAt: serverTimestamp(), updatedAt: serverTimestamp()
+            });
+          });
+          await batch.commit();
+        }
       },
       // 교사용 화면: 학생 기록 실시간 구독
       watchAll(onData, onError){
