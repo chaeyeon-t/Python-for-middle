@@ -118,6 +118,9 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .sc-lever{cursor:grab;outline:none}
 .sc-lever:focus-visible .lv-part{stroke:#fff;stroke-width:2}
 .sc-lever.done{cursor:default}
+.sc-train{cursor:pointer;outline:none;animation:scTrain 1.2s ease-in-out infinite}
+.sc-train.go{animation:none;cursor:default}
+@keyframes scTrain{50%{filter:drop-shadow(0 0 10px #ffb340)}}
 .sc-seg{transition:opacity .4s}
 .sc-full{animation:blink .45s 3}
 .mission{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 18px;align-items:start;flex:none}
@@ -1682,28 +1685,75 @@ const SC = (()=>{
       {x:370,y:0,w:60,h:34,text:"비상등만 깜빡인다. 엘리베이터가 층 사이에 멈췄다."}
     ]
   });
-  /* 12 최종 탈출 – 셔틀 발사 — 셔틀이 EXIT로 이동 */
+  /* 12 최종 탈출 – 셔틀 발사 — 정답 후 학생이 셔틀을 클릭하면 연료 200 → 50, 셔틀이 EXIT로 출발 */
   const shuttle = `<path d="M120 340 h300 q60 0 80 -40 q-20 -40 -80 -40 h-300 q-30 0 -30 40 t30 40z" fill="#dbe6e4"/>` +
       R(150,276,60,26,"#06181c",'rx="6"') + R(230,276,60,26,"#06181c",'rx="6"') + R(310,276,60,26,"#06181c",'rx="6"') +
       R(120,326,380,6,"#ffb340") + T(300,318,"ESCAPE SHUTTLE",{s:12,f:"#25343a",w:1});
+  // 연료 탱크 (val: 200이면 가득, 50이면 1/4)
+  const fuelTank = (val, ids) =>
+      T(72,102,"FUEL",{s:13,f:"#ffb340",w:1}) +
+      R(30,110,84,140,"#2c3d43",'rx="10" stroke="#4a5f66" stroke-width="2"') + R(40,124,64,112,"#0a1012",'rx="6"') +
+      R(40,124,64,112,"#ffb340",`rx="6" opacity=".75" ${ids?'id="fuelLv"':""} style="transform-box:fill-box;transform-origin:bottom;transform:scaleY(${val/200});transition:transform 1.8s ease"`) +
+      [0,1,2,3].map(k=>L(104,124+k*28,112,124+k*28,"#8aa1a0",1)).join("") +
+      T(72,186,String(val),{s:22,f:"#fff",w:1,ex:ids?'id="fuelNum"':""}) +
+      `<path d="M72 250 C 72 280, 110 270, 118 300" stroke="#4a5f66" stroke-width="6" fill="none"/>`;
   S.push({
-    winMs: 3400,
-    svg: w => room({wall:"#15232a"}) +
-      `<path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#05090a"/>` +
-      (w ? W(`<path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#fff6dc" opacity=".25"/>`, fadeIn(.3)) : "") +
-      T(670,120,"EXIT →",{s:16,f:"#6be39a",w:1}) +
-      L(40,360,800,360,"#4a5f66",4) + L(40,380,800,380,"#4a5f66",4) +
-      (w ? W(shuttle, "transform:translateX(560px);opacity:0;--from:translateX(0px);--o0:1;--t:2.4s;--d:.7s") +
-           FL(`<path d="M80 300 h-60 M80 318 h-80 M80 336 h-50" stroke="#ffb340" stroke-width="4" stroke-linecap="round"/>`, "--d:.6s;--t:1.4s") +
-           W(T(300,300,"셔틀 출발 완료",{s:16,f:"#4c6268"}), fadeIn(3.0))
-         : shuttle) +
-      R(40,190,90,120,"#33444a",'rx="8"') + T(85,256,"FUEL",{s:13,f:"#ffb340",w:1}) +
-      R(170,40,240,110,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + R(184,54,212,82,"#06181c",'rx="3"') +
-      (w ? screenText(184,54,212,82,[{t:"발사!",s:18,w:1},{t:"연료 계산 완료",s:12,f:"#dbe6e4"}],{top:32,d:.1})
-         : T(290,82,"발사 제어",{s:14,f:"#ffb340",w:1}) + T(290,104,"연료 계산 필요",{s:12,f:"#8aa1a0"}) + T(290,124,"발사 시 연료 150 사용",{s:11,f:"#ff6363"})),
+    interactive: true,
+    winTip: "▶ 그림 속 셔틀을 클릭해서 출발시켜 보세요!",
+    svg: (w, mode) => {
+      const fin = mode === "static", play = w && !fin;
+      let s = room({wall:"#15232a"}) +
+        `<path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#05090a"/>` +
+        (w ? `<g ${play?'id="exitGlow" style="opacity:0;transition:opacity 1s"':""}><path d="M560 330 V150 a110 110 0 0 1 220 0 V330z" fill="#fff6dc" opacity=".25"/></g>` : "") +
+        T(670,120,"EXIT →",{s:16,f:"#6be39a",w:1}) +
+        L(40,360,800,360,"#4a5f66",4) + L(40,380,800,380,"#4a5f66",4);
+      if(fin){
+        s += fuelTank(50) + T(300,300,"셔틀 출발 완료",{s:16,f:"#4c6268"});
+      }else if(play){
+        s += `<g id="train" class="sc-train" tabindex="0" role="button" aria-label="셔틀 출발시키기" style="transition:transform 2.6s cubic-bezier(.5,0,.6,1), opacity 1s ease 1.8s">` + shuttle + `</g>` +
+             `<g id="exhaust" style="opacity:0;transition:opacity .4s"><path d="M80 300 h-40 M80 318 h-60 M80 336 h-30" stroke="#ffb340" stroke-width="4" stroke-linecap="round"/></g>` +
+             fuelTank(200, true) +
+             `<g id="trainMsg">` + W(R(470,388,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#ffb340" stroke-width="2"') + T(620,414,"🚆 셔틀을 클릭해서 출발시키세요",{s:14,f:"#ffb340",w:1}), fadeIn(.6)) + `</g>`;
+      }else{
+        s += shuttle + fuelTank(200);
+      }
+      s += R(170,40,240,110,"#1f2c31",'rx="6" stroke="#3a4d53" stroke-width="2"') + R(184,54,212,82,"#06181c",'rx="3"');
+      s += fin ? T(290,90,"발사!",{s:18,f:OK,w:1}) + T(290,114,"연료 계산 완료",{s:12,f:"#dbe6e4"})
+         : play ? screenText(184,54,212,82,[{t:"발사 준비 완료",s:16,w:1},{t:"셔틀을 클릭하세요",s:12,f:"#dbe6e4"}],{top:32,d:.1})
+                + `<g id="launchScr" style="opacity:0;transition:opacity .4s">` + R(184,54,212,82,"#06181c",'rx="3"') + T(290,90,"발사!",{s:18,f:OK,w:1}) + T(290,114,"연료 계산 완료",{s:12,f:"#dbe6e4"}) + `</g>`
+         : T(290,82,"발사 제어",{s:14,f:"#ffb340",w:1}) + T(290,104,"연료 계산 필요",{s:12,f:"#8aa1a0"}) + T(290,124,"발사 시 연료 150 사용",{s:11,f:"#ff6363"});
+      return s;
+    },
+    onWin: (el, done) => {
+      const train = el.querySelector("#train");
+      let started = false;
+      const go = ()=>{
+        if(started) return; started = true;
+        train.classList.add("go"); train.removeAttribute("tabindex");
+        el.querySelector("#trainMsg").innerHTML = R(470,388,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#6be39a" stroke-width="2"') + T(620,414,"연료 150 사용 → 남은 연료 50",{s:14,f:OK,w:1});
+        // 1) 연료가 200 → 50으로 줄어듦
+        el.querySelector("#fuelLv").style.transform = "scaleY(.25)";
+        const num = el.querySelector("#fuelNum"); let v = 200;
+        const id = setInterval(()=>{ v = Math.max(50, v - 5); num.textContent = v; if(v <= 50) clearInterval(id); }, 1800/30);
+        // 2) 셔틀이 EXIT로 출발
+        setTimeout(()=>{
+          el.querySelector("#exhaust").style.opacity = 1;
+          el.querySelector("#exitGlow").style.opacity = 1;
+          el.querySelector("#launchScr").style.opacity = 1;
+          train.style.transform = "translateX(560px)"; train.style.opacity = 0;
+          el.querySelectorAll("#exhaust").forEach(x=>setTimeout(()=>{ x.style.opacity = 0; }, 1200));
+        }, 1900);
+        setTimeout(()=>{
+          el.querySelector("#trainMsg").innerHTML = R(470,388,300,40,"rgba(6,24,28,.92)",'rx="20" stroke="#6be39a" stroke-width="2"') + T(620,414,"🚀 셔틀 출발!",{s:16,f:OK,w:1});
+        }, 3200);
+        setTimeout(done, 4800);
+      };
+      train.addEventListener("click", go);
+      train.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+    },
     hot:{x:164,y:34,w:252,h:122,label:"발사 제어판"},
     clues:[
-      {x:40,y:190,w:90,h:120,text:"연료 통 보관함. 통마다 들어 있는 연료량이 다르다."},
+      {x:30,y:90,w:84,h:160,text:"연료 탱크에 연료가 200 들어 있다. 발사하면 150이 쓰인다."},
       {x:560,y:40,w:220,h:290,text:"터널 끝으로 바깥 빛이 보인다. 셔틀만 출발하면 된다!"}
     ]
   });
