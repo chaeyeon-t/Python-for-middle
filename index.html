@@ -67,14 +67,15 @@ h1,h2,h3{text-wrap:balance;margin:0}
 
 /* main */
 .main{flex:1;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(340px,1fr);gap:16px;padding:16px 20px;min-height:0}
-@media (max-width:1000px){.main{grid-template-columns:1fr;overflow:auto}.bench{min-height:640px}.brief,.brief-body{overflow:visible}.map{flex-wrap:wrap}.scene-help{display:none}}
+@media (max-width:1000px){.main{grid-template-columns:1fr;overflow:auto}.bench{min-height:640px}.brief,.brief-body{overflow:visible}.scene{flex:none;aspect-ratio:16/9;min-height:0}.map{flex-wrap:wrap}.scene-help{display:none}}
 .brief{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .tape{height:10px;background:repeating-linear-gradient(-45deg,var(--amber) 0 12px,#1a1a1a 12px 24px);flex:none}
-.brief-body{padding:16px 18px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.brief-body{padding:12px 16px;overflow:auto;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
 .room-head .grow{flex:1}
 .scene-help{font-size:13px;color:var(--muted);text-align:right}
-.scene{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#05090a;flex:none}
-.scene svg{display:block;width:100%;height:auto;max-height:58vh}
+/* 그림은 남는 높이에 맞춰 줄어듦 (미션 글은 항상 보이도록) */
+.scene{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#070c0e;flex:1 1 0;min-height:190px}
+.scene svg{display:block;width:100%;height:100%}
 .sc-clue{fill:transparent;cursor:zoom-in;outline:none}
 .sc-clue:hover,.sc-clue:focus-visible{fill:rgba(255,255,255,.06);stroke:rgba(255,255,255,.45);stroke-width:2;stroke-dasharray:6 5}
 .sc-hot{cursor:pointer;outline:none}
@@ -119,7 +120,7 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .sc-lever.done{cursor:default}
 .sc-seg{transition:opacity .4s}
 .sc-full{animation:blink .45s 3}
-.mission{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 18px;align-items:start}
+.mission{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 18px;align-items:start;flex:none}
 .mission .col{display:flex;flex-direction:column;gap:10px;min-width:0}
 @media (max-width:1250px){.mission{grid-template-columns:1fr}}
 .room-head{display:flex;gap:14px;align-items:center}
@@ -127,7 +128,7 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .room-icon svg{width:36px;height:36px}
 .eyebrow{font-family:var(--font-code);font-size:12px;color:var(--amber);letter-spacing:1px}
 .room-title{font-family:var(--font-display);font-size:26px;font-weight:400;line-height:1.2}
-.story{color:var(--muted);border-left:3px solid var(--cyan);padding:2px 0 2px 12px}
+.story{color:var(--muted);border-left:3px solid var(--cyan);padding:2px 0 2px 12px;margin:0}
 .task{font-weight:500;font-size:16px}
 .task code,.hint-box code{font-family:var(--font-code);background:var(--panel-2);border:1px solid var(--line);padding:0 5px;border-radius:3px;color:var(--cyan)}
 .io{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -1796,9 +1797,11 @@ function renderScene(i, mode){
     const show = ()=>{
       const c = sc.clues[+r.dataset.k], b = $("scBubble");
       b.textContent = c.text; b.hidden = false;
-      const cx = (c.x + c.w/2)/800*100, cy = (c.y + c.h)/450*100;
-      b.style.left = Math.min(Math.max(cx, 18), 82) + "%";
-      b.style.top = Math.min(cy, 78) + "%";
+      // 그림 좌표 → 화면 위치 (그림 크기가 바뀌어도 단서 바로 아래에 말풍선)
+      const svg = el.querySelector("svg"), box = el.getBoundingClientRect(), m = svg.getScreenCTM();
+      const px = m.a*(c.x + c.w/2) + m.e - box.left, py = m.d*(c.y + c.h) + m.f - box.top;
+      b.style.left = Math.min(Math.max(px, box.width*.2), box.width*.8) + "px";
+      b.style.top = Math.min(py, box.height - 70) + "px";
       clearTimeout(b._t); b._t = setTimeout(()=>{ b.hidden = true; }, 5000);
     };
     r.addEventListener("click", show);
